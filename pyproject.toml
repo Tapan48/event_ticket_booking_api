@@ -1,0 +1,29 @@
+[project]
+name = "ticket-booking-api"
+version = "0.1.0"
+description = "Event Ticketing & Booking API with overselling protection"
+requires-python = ">=3.13"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["**/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "DJ"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "common", "config"]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+# --ds on the command line beats any DJANGO_SETTINGS_MODULE in the environment.
+addopts = "-ra --ds=config.settings.test"
+
+[tool.coverage.run]
+source = ["apps", "common", "config"]
+omit = ["**/migrations/*", "config/settings/*", "config/asgi.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
