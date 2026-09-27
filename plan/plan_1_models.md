@@ -1,6 +1,13 @@
 # Phase 1: Models, Migrations, Admin, ERD
 
-> **Status: in progress**
+> **Status: ✅ done.** Deviations from the plan below, found during implementation:
+> - **Dropped `TicketType` `total >= 0`.** `available >= 0` plus `available <= total` already implies it, so it could never fire on its own. The constraint test caught this.
+> - **Extra constraints added** because they're cheap invariants: `user_role_valid`, `venue_capacity_positive`, `event_status_valid`, `order_status_valid`, `ticket_price_paid_non_negative`, and `ticket_checked_in_by_requires_time` (a check-in must record when it happened).
+> - **Choice enums are module-level and aliased on the model** (`Event.Status = EventStatus`), because a nested `Meta.constraints` can't reference a sibling nested class.
+> - **The admin hides the Profile inline when adding a user.** The signal already creates the profile; the inline would otherwise save a duplicate and break the add form. An admin test caught this.
+> - **Shared test helper** `common.tests.helpers.assert_violates(name, fn)` asserts that the *named* constraint fired, not just any `IntegrityError`.
+> - **The ERD was checked** by rendering it with mermaid-cli before committing.
+> - Result: 55 tests with 100% coverage. The dev DB is migrated and seeded, and admin login is checked with curl.
 
 ## Context
 This is Phase 1 of [plan_main.md](plan_main.md). It builds the whole data model, with the database constraints that later phases rely on, before any API code exists. Phase 4's overselling protection depends on the `quantity_available >= 0` CheckConstraint defined here. The custom User model has to land **before the first `migrate`**, and Phase 0 left the dev database unmigrated for this reason.

@@ -238,4 +238,4 @@ Each phase gets a detailed sub-plan in this folder, named `plan_<n>_<name>.md`.
 | Phase | Sub-plan | Status |
 |---|---|---|
 | 0 — Project setup | [plan_0_project_setup.md](plan_0_project_setup.md) | ✅ done |
-| 1 — Models, migrations, admin, ERD | [plan_1_models.md](plan_1_models.md) | in progress |
+| 1 — Models, migrations, admin, ERD | [plan_1_models.md](plan_1_models.md) | ✅ done |
