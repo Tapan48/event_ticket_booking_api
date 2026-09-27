@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "apps.accounts",
     "apps.events",
+    "apps.orders",
 ]
 
 MIDDLEWARE = [
