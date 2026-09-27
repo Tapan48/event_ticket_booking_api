@@ -237,4 +237,4 @@ Each phase gets a detailed sub-plan in this folder, named `plan_<n>_<name>.md`.
 
 | Phase | Sub-plan | Status |
 |---|---|---|
-| 0 — Project setup | [plan_0_project_setup.md](plan_0_project_setup.md) | in progress |
+| 0 — Project setup | [plan_0_project_setup.md](plan_0_project_setup.md) | ✅ done |

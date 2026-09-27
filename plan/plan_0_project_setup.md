@@ -1,5 +1,12 @@
 # Phase 0: Project Setup (Ticket Booking API)
 
+> **Status: ✅ done.** Deviations from the plan below, found during implementation:
+> - The Postgres host port is `${POSTGRES_HOST_PORT:-5434}`, not 5433, because 5433 was already taken by another local Compose project.
+> - `DJANGO_SETTINGS_MODULE` was removed from `.env.example`. pytest-django lets that env var override the ini setting, which made the tests run with *dev* settings. pytest now forces `--ds=config.settings.test` in `addopts`.
+> - `WHITENOISE_AUTOREFRESH = True` in the test settings, so whitenoise doesn't warn about the missing `staticfiles/` (collectstatic never runs in tests).
+> - `config/settings/*` is excluded from coverage because it loads before measurement starts.
+> - There are 3 health tests, not 2 (added: POST returns 405). The pre-commit git hook is installed from a local `.venv`.
+
 ## Context
 The full roadmap is in `plan/plan_main.md`. This plan covers **only Phase 0**: a runnable, tested and linted Django skeleton on Docker Compose (Postgres + Redis). Phase 1 (models) builds on it. No models and no custom User are created yet. You asked for proper local commits; you will push them yourself, so I won't add a remote and won't push.
 

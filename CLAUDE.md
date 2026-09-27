@@ -4,27 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Event Ticketing & Booking API (Django + DRF). Organizers create events and sell tickets; attendees browse, book, pay, and check in. The full phased roadmap is in `plan/plan_main.md` — read it before starting work and follow its phase order (finish and deploy before adding stretch features like Stripe).
+Event Ticketing & Booking API (Django + DRF). Organizers create events and sell tickets; attendees browse, book, pay, and check in. The full phased roadmap is in `plan/plan_main.md`; each phase has a detailed sub-plan `plan/plan_<n>_<name>.md` (write one before starting a phase and add it to the index at the bottom of `plan_main.md`). Follow the phase order — finish and deploy before stretch features like Stripe.
 
-As of this writing the repo contains only the plan; no code has been scaffolded yet. Update this file (commands, layout) once Phase 0 lands and they become real.
+Phase 0 (project skeleton) is done. Sections below marked "(planned)" describe code that doesn't exist yet.
 
-## Commands (planned — Docker Compose is the dev environment)
+**Until Phase 1 sets `AUTH_USER_MODEL = "accounts.User"`, never run `migrate` against the dev DB** — Django can't switch to a custom user model after the default auth migrations are applied. If it happens, reset with `docker compose down -v`.
+
+## Commands (Docker Compose is the dev environment)
 
 Postgres is required for development and tests: `select_for_update()` is a no-op on SQLite, so the locking/overselling tests are meaningless without Postgres. Do not switch tests to SQLite.
 
 ```bash
-docker compose up                                   # web, db (postgres:16), redis, worker, beat
-docker compose run --rm web python manage.py migrate
-docker compose run --rm web python manage.py seed_demo
-docker compose run --rm web pytest                  # full suite
-docker compose run --rm web pytest apps/orders/tests/test_booking.py::test_name   # single test
-docker compose run --rm web pytest -k oversell --count=20   # concurrency tests, repeated (pytest-repeat)
-ruff check . && ruff format .
+cp .env.example .env                                # first time only
+docker compose up                                   # web :8000, db (host port 5434), redis
+docker compose run --rm web pytest --cov            # full suite
+docker compose run --rm web pytest common/tests/test_health.py::test_health_ok   # single test
+docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
+.venv/bin/pre-commit run --all-files                # hooks are installed in .git/hooks
+# (planned) manage.py migrate / seed_demo, pytest -k oversell --count=20 (pytest-repeat)
 ```
 
-Settings are split `config/settings/{base,dev,test,prod}.py`; env comes from `.env` (`DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `ORDER_TTL_MINUTES`).
+- Settings are split `config/settings/{base,dev,test,prod}.py`; env comes from `.env` (see `.env.example`). `manage.py` defaults to dev, `wsgi.py`/`asgi.py` to prod.
+- pytest forces `--ds=config.settings.test` via `addopts` in `pyproject.toml`, because pytest-django otherwise lets a `DJANGO_SETTINGS_MODULE` env var win. Don't add that var to `.env`.
+- `worker`/`beat` Compose services are behind the `celery` profile and are placeholders until Phase 5.
+- New dependencies go in `requirements.txt` (runtime) or `requirements-dev.txt` (tests/lint), pinned; rebuild with `docker compose build`.
 
-## Architecture
+## Architecture (planned, from Phase 1 on)
 
 - Apps live under `apps/`: `accounts` (custom `User` with email login + `role` attendee/organizer, `Profile` via post_save signal), `events` (Venue, Category, Event, TicketType), `orders` (Order, Ticket, booking services, Celery tasks, check-in), `payments` (Stripe, stretch only). Shared permissions/pagination/base model in `common/`.
 - `AUTH_USER_MODEL` must be set before the first migration.
