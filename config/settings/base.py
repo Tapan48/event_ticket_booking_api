@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "apps.accounts",
 ]
 
 MIDDLEWARE = [
@@ -62,7 +63,7 @@ DATABASES["default"]["CONN_MAX_AGE"] = 60
 # Broker / cache for Celery (Phase 5).
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
 
-# TODO(Phase 1): set AUTH_USER_MODEL = "accounts.User" BEFORE the first migrate.
+AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
