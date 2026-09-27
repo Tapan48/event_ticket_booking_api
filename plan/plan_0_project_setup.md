@@ -91,7 +91,7 @@ Current state:
 - `CLAUDE.md`: switch the commands from "planned" to real and note the don't-migrate-before-Phase-1 rule.
 - `plan/plan_main.md` and `plan/plan_0_project_setup.md`: mark Phase 0 as done.
 
-## Commits (local only, conventional style, each ending with the Co-Authored-By line)
+## Commits (local only, conventional style)
 1. `docs: add project roadmap, Phase 0 sub-plan and CLAUDE.md`: `plan/plan_main.md`, `plan/plan_0_project_setup.md`, `CLAUDE.md`
 2. `chore: add dependencies, lint and test tooling`: requirements, `pyproject.toml`, `.pre-commit-config.yaml`, `.gitignore`
 3. `feat: scaffold Django project with split settings`: `manage.py`, `config/`, `apps/`, `common/__init__.py`, `.env.example`
