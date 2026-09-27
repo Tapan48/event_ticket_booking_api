@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16-alpine
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_HOST_PORT:-5434}:5432" # non-default host port avoids clashing with a local Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: .
+    env_file: .env
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery services are wired up in Phase 5; start them with `docker compose --profile celery up`.
+  worker:
+    build: .
+    env_file: .env
+    command: echo "TODO(Phase 5) celery -A config worker -l info"
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["celery"]
+
+  beat:
+    build: .
+    env_file: .env
+    command: echo "TODO(Phase 5) celery -A config beat -l info"
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles: ["celery"]
+
+volumes:
+  postgres_data:
