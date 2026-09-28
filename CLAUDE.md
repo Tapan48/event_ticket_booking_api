@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Event Ticketing & Booking API (Django + DRF). Organizers create events and sell tickets; attendees browse, book, pay, and check in. The full phased roadmap is in `plan/plan_main.md`; each phase has a detailed sub-plan `plan/plan_<n>_<name>.md` (write one before starting a phase and add it to the index at the bottom of `plan_main.md`). Follow the phase order — finish and deploy before stretch features like Stripe.
 
-Phases 0 (skeleton) and 1 (models, admin, seed data, ERD) are done; there are no API endpoints yet. Items marked "(planned)" describe code that doesn't exist yet.
+Phases 0–2 are done (skeleton; models/admin/seed/ERD; JWT auth + CRUD for venues, categories, events, ticket types). No filtering/pagination (Phase 3) or booking (Phase 4) yet. Items marked "(planned)" describe code that doesn't exist yet. Swagger UI: `/api/docs/`.
 
 ## Commands (Docker Compose is the dev environment)
 
@@ -46,11 +46,22 @@ docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
 - DB constraints are the last line of defence and must be kept — above all `ticket_type_quantity_available_non_negative`. They're named `IntegerField` + `CheckConstraint`s (not `PositiveIntegerField`) with `violation_error_message`s, so the admin's `full_clean()` shows them as form errors. (planned) An `IntegrityError` from the quantity constraint maps to a 409 "sold out".
 - Tickets are created at order time (pending) and are only valid for check-in once the order is `paid`.
 - (planned) Celery beat runs `expire_stale_orders` every 60s, selecting with `select_for_update(skip_locked=True)`; the beat schedule is in settings (no django-celery-beat).
-- (planned) Permissions: organizers edit only their own events/ticket types (ownership via `obj.event.organizer` for ticket types); attendees see only their own orders (other users' orders → 404 via queryset scoping, not 403); check-in is staff or that event's organizer. Owner fields are set from `request.user` in `perform_create`, never from the payload.
+
+## API layer
+
+- All viewsets register on the single `DefaultRouter` in `config/api_router.py` (mounted at `/api/`); auth views live in `apps/accounts/urls.py` at `/api/auth/`. Add new apps' viewsets to that router, not a per-app one.
+- DRF defaults (`config/settings/base.py`): JWT-only auth, default permission `IsAuthenticated` — public endpoints must opt in (e.g. `*OrReadOnly`, or `AllowAny` + `authentication_classes = []` on register).
+- `common.exceptions.exception_handler` turns `ProtectedError` into 409, so deleting PROTECT-referenced rows needs no per-view handling.
+- Permissions (`common/permissions.py`): `IsOrganizerOrReadOnly`/`IsStaffOrReadOnly` gate writes by role; `IsOwnerOrReadOnly` reads `view.owner_field` (dotted paths OK, e.g. `"event.organizer"`) and compares FK ids. Owner fields are set in `perform_create` from `request.user`, never the payload. Object-level checks don't run on create, so ownership of a *parent* (ticket type → event) is checked in `perform_create` (403).
+- Visibility is queryset scoping, not permissions: `Event.objects.visible_to(user)` (published for everyone, own events for organizers, all for staff) — hidden rows 404. Reuse it for anything hanging off events.
+- DB constraints get mirrored as serializer validation (min values, date order) so clients get 400s, not 500s.
+- `TicketType.quantity_available` is read-only in the API; editing `quantity_total` locks the row and preserves the sold count (`TicketTypeSerializer.update`).
+- drf-spectacular schema must stay warning-free — `common/tests/test_api_docs.py` runs `spectacular --validate --fail-on-warn`.
+- (planned) attendees see only their own orders (404 for others via queryset scoping); check-in is staff or that event's organizer.
 
 ## Testing conventions
 
-- pytest + pytest-django + factory-boy. Tests live per app in `apps/<app>/tests/`; factories in `apps/<app>/tests/factories.py` (`UserFactory`/`OrganizerFactory`/`StaffFactory`, `EventFactory` (published, 7 days out), `TicketTypeFactory`, `OrderFactory`, `TicketFactory`; factory users' password is `DEFAULT_PASSWORD`). Admin smoke tests use pytest-django's `admin_client`. (planned) API fixtures (`api_client`, `attendee`, `organizer`, `staff`) in a root `conftest.py`.
+- pytest + pytest-django + factory-boy. Tests live per app in `apps/<app>/tests/`; factories in `apps/<app>/tests/factories.py` (`UserFactory`/`OrganizerFactory`/`StaffFactory`, `EventFactory` (published, 7 days out), `TicketTypeFactory`, `OrderFactory`, `TicketFactory`; factory users' password is `DEFAULT_PASSWORD`). Admin smoke tests use pytest-django's `admin_client`. Root `conftest.py` provides `api_client`, `client_for(user)` (force-authenticated `APIClient`; `None` = anonymous) and `attendee`/`organizer`/`other_organizer`/`staff` fixtures; permission matrices parametrize fixture names and resolve them with `request.getfixturevalue`. Auth-flow tests use real JWTs via the login endpoint.
 - To test a DB constraint, use `common.tests.helpers.assert_violates("<constraint_name>", lambda: ...)` — it wraps the statement in `transaction.atomic()` and asserts that specific constraint fired.
 - (planned) Concurrency tests use `@pytest.mark.django_db(transaction=True)`, threads synchronized with `threading.Barrier`, and must close each thread's DB connection.
 - (planned) CI (GitHub Actions) runs ruff and `pytest --cov --cov-fail-under=85` against Postgres and Redis service containers.

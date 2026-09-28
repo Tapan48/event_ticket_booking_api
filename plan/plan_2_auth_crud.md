@@ -1,6 +1,11 @@
 # Phase 2: Auth + CRUD + Permissions
 
-> **Status: in progress**
+> **Status: ✅ done.** Deviations and notes:
+> - **`CanCheckIn` moves to Phase 4**, where check-in is built. `IsEventOrganizer` was replaced by `IsOwnerOrReadOnly` with a dotted `owner_field`.
+> - **Waiting for Phase 3:** the `?event=` filter on ticket types and list pagination, both done with django-filter and the global paginator. Lists are unpaginated until then.
+> - **Cancelled events are hidden from the public**, like drafts, and stay visible to their organizer and staff.
+> - **Dev `SECRET_KEY` lengthened** in `.env.example`. At 22 bytes it triggered PyJWT's insecure HS256 key warning; the minimum is 32. **Update your local `.env` the same way.**
+> - Result: 128 tests with 100% coverage, and a warning-free OpenAPI schema. The curl run (register → login → venue/event/ticket type → 403/404 checks → refresh rotation) passed against the dev server.
 
 ## Context
 This is Phase 2 of [plan_main.md](plan_main.md). It exposes the Phase 1 models through a JWT-secured REST API with role- and ownership-based permissions. Filtering, search and pagination are Phase 3, and booking is Phase 4.

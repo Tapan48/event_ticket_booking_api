@@ -2,10 +2,26 @@
 
 A Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
-> **Status:** Phases 0–1 of the [roadmap](plan/plan_main.md) are complete: the project skeleton, the data model with its database constraints, the admin, and demo data. The REST API comes next. Features land phase by phase; see [`plan/`](plan/).
+> **Status:** Phases 0–2 of the [roadmap](plan/plan_main.md) are complete: the project skeleton, the data model with database constraints, and JWT auth with role- and ownership-based CRUD. Filtering and booking come next. See [`plan/`](plan/).
 
 ## Stack
-Django 5.2 · Django REST Framework · PostgreSQL 16 · Redis 7 · Docker Compose · pytest · ruff
+Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Redis 7 · Docker Compose · pytest · ruff
+
+## API
+
+Interactive docs: **http://localhost:8000/api/docs/** (Swagger UI). Log in there, then click *Authorize* and paste the access token.
+
+| Endpoint | Access |
+|---|---|
+| `POST /api/auth/register/` | Public. Register as `attendee` (default) or `organizer`. |
+| `POST /api/auth/login/`, `/refresh/`, `/logout/` | JWT pair; refresh tokens rotate and are blacklisted on logout. |
+| `GET/PATCH /api/auth/me/` | Your account and profile. |
+| `/api/venues/` | Anyone reads; organizers create; the creator or staff edit. |
+| `/api/categories/` (by slug) | Anyone reads; staff write. |
+| `/api/events/` | Anyone reads published events; organizers also see their own drafts. The owner or staff edit. |
+| `/api/ticket-types/` | Only the event's organizer adds or edits them. Stock (`quantity_available`) is read-only. |
+
+Deleting something that is still referenced, such as a venue with events or an event with sold tickets, returns **409 Conflict**.
 
 ## Data model
 
@@ -25,7 +41,7 @@ docker compose run --rm web python manage.py createsuperuser
 curl localhost:8000/health/                                 # {"status": "ok", "database": "ok"}
 ```
 
-Admin is at http://localhost:8000/admin/; log in with the superuser you created. The demo users (`organizer@demo.dev`, `organizer2@demo.dev`, `attendee@demo.dev`, `staff@demo.dev`) share the password `demo-pass-123` and are for the API, which arrives in later phases.
+Admin is at http://localhost:8000/admin/; log in with the superuser you created. The demo users (`organizer@demo.dev`, `organizer2@demo.dev`, `attendee@demo.dev`, `staff@demo.dev`) share the password `demo-pass-123`; use them to log in to the API.
 
 ## Development
 
