@@ -51,6 +51,17 @@ class EventStatus(models.TextChoices):
     CANCELLED = "cancelled", "Cancelled"
 
 
+class EventQuerySet(models.QuerySet):
+    def visible_to(self, user):
+        """Public: published events. Organizers also see their own; staff see everything."""
+        if user.is_staff:
+            return self
+        visible = Q(status=EventStatus.PUBLISHED)
+        if user.is_authenticated:
+            visible |= Q(organizer=user)
+        return self.filter(visible)
+
+
 class Event(TimeStampedModel):
     Status = EventStatus
 
@@ -66,6 +77,8 @@ class Event(TimeStampedModel):
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=20, choices=EventStatus.choices, default=EventStatus.DRAFT)
     max_tickets_per_user = models.SmallIntegerField(default=10)
+
+    objects = EventQuerySet.as_manager()
 
     class Meta:
         ordering = ["starts_at"]
