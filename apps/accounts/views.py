@@ -1,0 +1,17 @@
+from rest_framework import generics, permissions
+
+from .serializers import MeSerializer, RegisterSerializer
+
+
+class RegisterView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+
+class MeView(generics.RetrieveUpdateAPIView):
+    serializer_class = MeSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_object(self):
+        return self.request.user
