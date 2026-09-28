@@ -36,7 +36,7 @@ class TestVenues:
         response = api_client.get(url("venue-list"))
 
         assert response.status_code == 200
-        assert len(response.data) == 1
+        assert response.data["count"] == 1
 
     @pytest.mark.parametrize(("who", "status"), [(None, 401), ("attendee", 403)])
     def test_only_organizers_can_create(self, request, client_for, who, status):
@@ -106,14 +106,14 @@ class TestEventVisibility:
 
         response = api_client.get(url("event-list"))
 
-        assert [e["id"] for e in response.data] == [published.pk]
+        assert [e["id"] for e in response.data["results"]] == [published.pk]
 
     def test_organizer_also_sees_own_drafts_only(self, client_for, organizer):
         mine = EventFactory(organizer=organizer, status=Event.Status.DRAFT)
         theirs = EventFactory(status=Event.Status.DRAFT)
         client = client_for(organizer)
 
-        ids = {e["id"] for e in client.get(url("event-list")).data}
+        ids = {e["id"] for e in client.get(url("event-list")).data["results"]}
 
         assert mine.pk in ids
         assert theirs.pk not in ids
@@ -123,7 +123,7 @@ class TestEventVisibility:
         EventFactory(status=Event.Status.DRAFT)
         EventFactory()
 
-        assert len(client_for(staff).get(url("event-list")).data) == 2
+        assert client_for(staff).get(url("event-list")).data["count"] == 2
 
     def test_detail_nests_venue_categories_and_ticket_types(self, api_client):
         ticket_type = TicketTypeFactory(name="VIP")
@@ -346,7 +346,7 @@ class TestTicketTypes:
 
         response = api_client.get(url("ticket-type-list"))
 
-        assert [t["id"] for t in response.data] == [visible.pk]
+        assert [t["id"] for t in response.data["results"]] == [visible.pk]
 
 
 def test_event_list_query_count_does_not_grow_with_rows(api_client):

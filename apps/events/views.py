@@ -17,6 +17,8 @@ class VenueViewSet(viewsets.ModelViewSet):
     serializer_class = VenueSerializer
     permission_classes = [IsOrganizerOrReadOnly, IsOwnerOrReadOnly]
     owner_field = "created_by"
+    ordering_fields = ["name", "city", "capacity"]
+    ordering = ["name", "id"]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -27,12 +29,16 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsStaffOrReadOnly]
     lookup_field = "slug"
+    ordering_fields = ["name"]
+    ordering = ["name"]
 
 
 class EventViewSet(viewsets.ModelViewSet):
     serializer_class = EventSerializer
     permission_classes = [IsOrganizerOrReadOnly, IsOwnerOrReadOnly]
     owner_field = "organizer"
+    ordering_fields = ["starts_at", "created_at"]
+    ordering = ["starts_at", "id"]
 
     def get_queryset(self):
         return (
@@ -49,6 +55,8 @@ class TicketTypeViewSet(viewsets.ModelViewSet):
     serializer_class = TicketTypeSerializer
     permission_classes = [IsOrganizerOrReadOnly, IsOwnerOrReadOnly]
     owner_field = "event.organizer"
+    ordering_fields = ["price", "name"]
+    ordering = ["event_id", "price", "id"]
 
     def get_queryset(self):
         visible_events = Event.objects.visible_to(self.request.user)
