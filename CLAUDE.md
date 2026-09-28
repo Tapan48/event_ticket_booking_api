@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Event Ticketing & Booking API (Django + DRF). Organizers create events and sell tickets; attendees browse, book, pay, and check in. The full phased roadmap is in `plan/plan_main.md`; each phase has a detailed sub-plan `plan/plan_<n>_<name>.md` (write one before starting a phase and add it to the index at the bottom of `plan_main.md`). Follow the phase order — finish and deploy before stretch features like Stripe.
 
-Phases 0–2 are done (skeleton; models/admin/seed/ERD; JWT auth + CRUD for venues, categories, events, ticket types). No filtering/pagination (Phase 3) or booking (Phase 4) yet. Items marked "(planned)" describe code that doesn't exist yet. Swagger UI: `/api/docs/`.
+Phases 0–3 are done (skeleton; models/admin/seed/ERD; JWT auth + CRUD for venues, categories, events, ticket types; filtering/search/pagination). No booking (Phase 4) yet. Items marked "(planned)" describe code that doesn't exist yet. Swagger UI: `/api/docs/`.
 
 ## Commands (Docker Compose is the dev environment)
 
@@ -18,7 +18,7 @@ docker compose up                                   # web :8000, db (host port 5
 docker compose run --rm web python manage.py migrate
 docker compose run --rm web python manage.py seed_demo   # idempotent; demo users use demo-pass-123
 docker compose run --rm web python manage.py makemigrations --check --dry-run   # drift check
-docker compose run --rm web pytest --cov            # full suite
+docker compose run --rm web pytest --cov            # full suite; fails under 90% coverage (pyproject fail_under)
 docker compose run --rm web pytest apps/events/tests/test_models.py::TestTicketType::test_database_blocks_overselling
 docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
 .venv/bin/pre-commit run --all-files                # hooks are installed in .git/hooks
@@ -54,6 +54,9 @@ docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
 - `common.exceptions.exception_handler` turns `ProtectedError` into 409, so deleting PROTECT-referenced rows needs no per-view handling.
 - Permissions (`common/permissions.py`): `IsOrganizerOrReadOnly`/`IsStaffOrReadOnly` gate writes by role; `IsOwnerOrReadOnly` reads `view.owner_field` (dotted paths OK, e.g. `"event.organizer"`) and compares FK ids. Owner fields are set in `perform_create` from `request.user`, never the payload. Object-level checks don't run on create, so ownership of a *parent* (ticket type → event) is checked in `perform_create` (403).
 - Visibility is queryset scoping, not permissions: `Event.objects.visible_to(user)` (published for everyone, own events for organizers, all for staff) — hidden rows 404. Reuse it for anything hanging off events.
+- Pagination (`common.pagination.StandardPagination`, 20/page, `?page_size` ≤ 100) and the filter backends (django-filter, `SearchFilter`, `OrderingFilter`) are global. Every list view must declare `ordering_fields` (otherwise any serializer field is orderable) and a default `ordering` ending in `id` so pages are stable. List responses are `{count, next, previous, results}`.
+- FilterSets live in `apps/<app>/filters.py`. Filters over multi-valued relations that need several conditions on the *same* related row use an `Exists()` subquery (see `EventFilter.filter_queryset` price bounds), not chained filters — chaining can match different rows and duplicates results.
+- `EventViewSet` annotates `min_price` for ordering; the response's `min_price` field is computed from prefetched ticket types instead, so it also works on create/update responses (no annotation there).
 - DB constraints get mirrored as serializer validation (min values, date order) so clients get 400s, not 500s.
 - `TicketType.quantity_available` is read-only in the API; editing `quantity_total` locks the row and preserves the sold count (`TicketTypeSerializer.update`).
 - drf-spectacular schema must stay warning-free — `common/tests/test_api_docs.py` runs `spectacular --validate --fail-on-warn`.
@@ -64,4 +67,4 @@ docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
 - pytest + pytest-django + factory-boy. Tests live per app in `apps/<app>/tests/`; factories in `apps/<app>/tests/factories.py` (`UserFactory`/`OrganizerFactory`/`StaffFactory`, `EventFactory` (published, 7 days out), `TicketTypeFactory`, `OrderFactory`, `TicketFactory`; factory users' password is `DEFAULT_PASSWORD`). Admin smoke tests use pytest-django's `admin_client`. Root `conftest.py` provides `api_client`, `client_for(user)` (force-authenticated `APIClient`; `None` = anonymous) and `attendee`/`organizer`/`other_organizer`/`staff` fixtures; permission matrices parametrize fixture names and resolve them with `request.getfixturevalue`. Auth-flow tests use real JWTs via the login endpoint.
 - To test a DB constraint, use `common.tests.helpers.assert_violates("<constraint_name>", lambda: ...)` — it wraps the statement in `transaction.atomic()` and asserts that specific constraint fired.
 - (planned) Concurrency tests use `@pytest.mark.django_db(transaction=True)`, threads synchronized with `threading.Barrier`, and must close each thread's DB connection.
-- (planned) CI (GitHub Actions) runs ruff and `pytest --cov --cov-fail-under=85` against Postgres and Redis service containers.
+- (planned) CI (GitHub Actions) runs ruff and `pytest --cov` (90% floor from pyproject) against Postgres and Redis service containers.

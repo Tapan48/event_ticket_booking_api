@@ -2,7 +2,7 @@
 
 A Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
-> **Status:** Phases 0–2 of the [roadmap](plan/plan_main.md) are complete: the project skeleton, the data model with database constraints, and JWT auth with role- and ownership-based CRUD. Filtering and booking come next. See [`plan/`](plan/).
+> **Status:** Phases 0–3 of the [roadmap](plan/plan_main.md) are complete: the project skeleton, the data model with database constraints, JWT auth with role- and ownership-based CRUD, and filtering, search and pagination. Booking with overselling protection comes next. See [`plan/`](plan/).
 
 ## Stack
 Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Redis 7 · Docker Compose · pytest · ruff
@@ -22,6 +22,30 @@ Interactive docs: **http://localhost:8000/api/docs/** (Swagger UI). Log in there
 | `/api/ticket-types/` | Only the event's organizer adds or edits them. Stock (`quantity_available`) is read-only. |
 
 Deleting something that is still referenced, such as a venue with events or an event with sold tickets, returns **409 Conflict**.
+
+### Browsing events
+
+Lists are paginated (`?page=`, `?page_size=` up to 100; default 20) and return `count`, `next`, `previous` and `results`.
+
+```
+GET /api/events/?city=pune&category=music&upcoming=true
+GET /api/events/?starts_after=2026-10-01&starts_before=2026-11-01
+GET /api/events/?min_price=500&max_price=1000&ordering=min_price
+GET /api/events/?search=rock
+```
+
+| Parameter | Meaning |
+|---|---|
+| `city` | Venue city, case-insensitive. |
+| `category` | Category slug. |
+| `starts_after` / `starts_before` | ISO date or datetime; after is inclusive, before is exclusive. |
+| `upcoming` | `true` for events that haven't started, `false` for events that have. |
+| `min_price` / `max_price` | The event has **a single ticket type** in this range. |
+| `status` | For organizers, e.g. `?status=draft` for their own drafts. |
+| `search` | Title, description and venue name. |
+| `ordering` | `starts_at` (the default), `created_at` or `min_price`. Prefix with `-` for descending. |
+
+Venues filter by `?city=` and support `?search=`. Categories support `?search=`. Ticket types filter by `?event=<id>`.
 
 ## Data model
 

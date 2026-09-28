@@ -1,6 +1,10 @@
 # Phase 3: Filtering, Search, Pagination
 
-> **Status: in progress**
+> **Status: ✅ done.** Built as planned. Notes:
+> - The price-range filter is an `Exists()` subquery. The test with a 50 + 500 event against a 100–200 range proves both bounds apply to the same tier.
+> - Event responses gained a `min_price` field, and a new `upcoming` filter was added.
+> - The coverage floor is 90%, stricter than the 85% in the main plan's CI step, which now just reuses the pyproject floor.
+> - Result: 150 tests with 100% coverage, and the schema is still warning-free. A curl run against the seeded dev DB checked city, category, date range, price range, search, ordering, paging and a bad value (400).
 
 ## Context
 This is Phase 3 of [plan_main.md](plan_main.md). It makes the Phase 2 list endpoints usable for browsing: attendees filter events by city, date range, category and price, search by title, and page through results. It also picks up the `?event=` ticket-type filter deferred from Phase 2.
