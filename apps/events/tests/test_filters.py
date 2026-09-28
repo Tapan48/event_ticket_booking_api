@@ -167,3 +167,35 @@ class TestEventOrdering:
 
         assert response.status_code == 201
         assert response.data["min_price"] is None
+
+
+class TestOtherLists:
+    def test_venues_filter_by_city_and_search(self, api_client):
+        pune = VenueFactory(name="Phoenix Hall", city="Pune")
+        mumbai = VenueFactory(name="NESCO Centre", city="Mumbai")
+        venues = reverse("venue-list")
+
+        assert ids(api_client.get(venues, {"city": "PUNE"})) == [pune.pk]
+        assert ids(api_client.get(venues, {"search": "phoenix"})) == [pune.pk]
+        assert ids(api_client.get(venues, {"search": "mumbai"})) == [mumbai.pk]
+
+    def test_categories_search_by_name(self, api_client):
+        CategoryFactory(name="Stand-up Comedy", slug="comedy")
+        CategoryFactory(name="Music", slug="music")
+
+        response = api_client.get(reverse("category-list"), {"search": "comedy"})
+
+        assert [c["slug"] for c in response.data["results"]] == ["comedy"]
+
+    def test_ticket_types_filter_by_event_and_order_by_price(self, api_client):
+        event = EventFactory()
+        vip = TicketTypeFactory(event=event, price=Decimal("900"))
+        general = TicketTypeFactory(event=event, price=Decimal("100"))
+        TicketTypeFactory()  # another event's tier
+        ticket_types = reverse("ticket-type-list")
+
+        assert ids(api_client.get(ticket_types, {"event": event.pk})) == [general.pk, vip.pk]
+        assert ids(api_client.get(ticket_types, {"event": event.pk, "ordering": "-price"})) == [
+            vip.pk,
+            general.pk,
+        ]

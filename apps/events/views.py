@@ -4,7 +4,7 @@ from rest_framework.exceptions import PermissionDenied
 
 from common.permissions import IsOrganizerOrReadOnly, IsOwnerOrReadOnly, IsStaffOrReadOnly
 
-from .filters import EventFilter
+from .filters import EventFilter, VenueFilter
 from .models import Category, Event, TicketType, Venue
 from .serializers import (
     CategorySerializer,
@@ -19,6 +19,8 @@ class VenueViewSet(viewsets.ModelViewSet):
     serializer_class = VenueSerializer
     permission_classes = [IsOrganizerOrReadOnly, IsOwnerOrReadOnly]
     owner_field = "created_by"
+    filterset_class = VenueFilter
+    search_fields = ["name", "address", "city"]
     ordering_fields = ["name", "city", "capacity"]
     ordering = ["name", "id"]
 
@@ -31,6 +33,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsStaffOrReadOnly]
     lookup_field = "slug"
+    search_fields = ["name"]
     ordering_fields = ["name"]
     ordering = ["name"]
 
@@ -60,6 +63,7 @@ class TicketTypeViewSet(viewsets.ModelViewSet):
     serializer_class = TicketTypeSerializer
     permission_classes = [IsOrganizerOrReadOnly, IsOwnerOrReadOnly]
     owner_field = "event.organizer"
+    filterset_fields = ["event"]
     ordering_fields = ["price", "name"]
     ordering = ["event_id", "price", "id"]
 

@@ -2,7 +2,15 @@ import django_filters as filters
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
-from .models import Event, TicketType
+from .models import Event, TicketType, Venue
+
+
+class VenueFilter(filters.FilterSet):
+    city = filters.CharFilter(lookup_expr="iexact", help_text="City (case-insensitive).")
+
+    class Meta:
+        model = Venue
+        fields = ["city"]
 
 
 class EventFilter(filters.FilterSet):
