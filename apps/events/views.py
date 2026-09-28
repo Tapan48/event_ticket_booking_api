@@ -1,8 +1,10 @@
+from django.db.models import Min
 from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied
 
 from common.permissions import IsOrganizerOrReadOnly, IsOwnerOrReadOnly, IsStaffOrReadOnly
 
+from .filters import EventFilter
 from .models import Category, Event, TicketType, Venue
 from .serializers import (
     CategorySerializer,
@@ -37,7 +39,9 @@ class EventViewSet(viewsets.ModelViewSet):
     serializer_class = EventSerializer
     permission_classes = [IsOrganizerOrReadOnly, IsOwnerOrReadOnly]
     owner_field = "organizer"
-    ordering_fields = ["starts_at", "created_at"]
+    filterset_class = EventFilter
+    search_fields = ["title", "description", "venue__name"]
+    ordering_fields = ["starts_at", "created_at", "min_price"]
     ordering = ["starts_at", "id"]
 
     def get_queryset(self):
@@ -45,6 +49,7 @@ class EventViewSet(viewsets.ModelViewSet):
             Event.objects.visible_to(self.request.user)
             .select_related("venue")
             .prefetch_related("categories", "ticket_types")
+            .annotate(min_price=Min("ticket_types__price"))  # for ?ordering=min_price
         )
 
     def perform_create(self, serializer):

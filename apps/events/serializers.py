@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Category, Event, TicketType, Venue
@@ -76,6 +77,7 @@ class EventSerializer(serializers.ModelSerializer):
         many=True, slug_field="slug", queryset=Category.objects.all(), required=False
     )
     ticket_types = EventTicketTypeSerializer(many=True, read_only=True)
+    min_price = serializers.SerializerMethodField(help_text="Cheapest ticket price, if any.")
 
     class Meta:
         model = Event
@@ -92,10 +94,17 @@ class EventSerializer(serializers.ModelSerializer):
             "status",
             "max_tickets_per_user",
             "ticket_types",
+            "min_price",
             "created_at",
         ]
         read_only_fields = ["id", "created_at"]
         extra_kwargs = {"max_tickets_per_user": {"min_value": 1}}
+
+    @extend_schema_field(serializers.DecimalField(max_digits=10, decimal_places=2, allow_null=True))
+    def get_min_price(self, obj):
+        # Uses the prefetched ticket types, so it also works on create/update responses.
+        prices = [ticket_type.price for ticket_type in obj.ticket_types.all()]
+        return f"{min(prices):.2f}" if prices else None
 
     def validate(self, attrs):
         starts_at = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
