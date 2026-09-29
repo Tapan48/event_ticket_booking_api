@@ -1,0 +1,13 @@
+Hi{% if order.user.first_name %} {{ order.user.first_name }}{% endif %},
+
+You're going to {{ event.title }}!
+
+When:  {{ event.starts_at|date:"D, j M Y, H:i" }} UTC
+Where: {{ event.venue.name }}, {{ event.venue.address }}, {{ event.venue.city }}
+Order: #{{ order.pk }} · {{ order.total_amount }}
+
+Your tickets (show the code at the door):
+{% for ticket in tickets %}
+  {{ ticket.ticket_type.name }}: {{ ticket.code }}{% endfor %}
+
+Each code can be scanned once.

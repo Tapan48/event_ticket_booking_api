@@ -123,6 +123,12 @@ def mark_order_paid(order):
             order.status = Order.Status.PAID
             order.paid_at = timezone.now()
             order.save(update_fields=["status", "paid_at", "updated_at"])
+            # Queued only if this transaction commits, so the worker sees the paid order
+            # and a rolled-back payment never emails.
+            from .tasks import send_ticket_email  # lazy: tasks import this module
+
+            order_id = order.pk
+            transaction.on_commit(lambda: send_ticket_email.delay(order_id))
     if expired:
         # Commit the release first so the stock goes back on sale, then report it.
         release_order(order, Order.Status.EXPIRED)

@@ -45,6 +45,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
 
   beat:
     build: .
@@ -56,6 +58,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  # Catches every outgoing email in dev; inbox at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025"
 
 volumes:
   postgres_data:

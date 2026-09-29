@@ -74,6 +74,10 @@ CELERY_TIMEZONE = "UTC"
 CELERY_TASK_IGNORE_RESULT = True  # nothing reads task results, so no result backend
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
+# EMAIL_URL, e.g. smtp://user:pass@host:587 or consolemail:// (sets EMAIL_BACKEND, EMAIL_HOST, ...).
+globals().update(env.email_url("EMAIL_URL", default="consolemail://"))
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Ticketing <tickets@ticketing.local>")
+
 AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [

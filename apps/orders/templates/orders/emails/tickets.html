@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; color: #1f2937; max-width: 560px; margin: 0 auto;">
+    <h2 style="margin-bottom: 4px;">You're going to {{ event.title }}!</h2>
+    <p style="margin-top: 0; color: #4b5563;">
+      {{ event.starts_at|date:"D, j M Y, H:i" }} UTC<br>
+      {{ event.venue.name }}, {{ event.venue.address }}, {{ event.venue.city }}
+    </p>
+    <p>Hi{% if order.user.first_name %} {{ order.user.first_name }}{% endif %}, here are your tickets for order #{{ order.pk }} ({{ order.total_amount }}). Show a code at the door; each can be scanned once.</p>
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr><th align="left" style="border-bottom: 1px solid #e5e7eb; padding: 8px 0;">Ticket</th><th align="left" style="border-bottom: 1px solid #e5e7eb; padding: 8px 0;">Code</th></tr>
+      </thead>
+      <tbody>
+        {% for ticket in tickets %}
+        <tr>
+          <td style="padding: 8px 0;">{{ ticket.ticket_type.name }}</td>
+          <td style="padding: 8px 0; font-family: ui-monospace, Menlo, monospace; font-size: 16px; letter-spacing: 1px;">{{ ticket.code }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </body>
+</html>
