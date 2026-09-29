@@ -8,10 +8,10 @@ The project directory is empty (only `hi.txt`) and is not yet a git repo. Local 
 **Decisions made:**
 - Local dev runs on Docker Compose from day 1, with Postgres and Redis. SQLite can't do `select_for_update`, so the locking test needs real Postgres.
 - Stripe is an **optional stretch phase after deployment**. v1 uses a mock `pay` endpoint that calls the same `mark_order_paid()` service the Stripe webhook will call later.
-- Deploy target is **Render**, using a `render.yaml` blueprint.
+- Deploy target is the **existing Oracle Cloud ARM instance**, alongside the RAG app, using a separate `ticket-booking` Compose project and `docker-compose.prod.yml`.
 - Mode: after you approve the plan, I build **Phase 0 + Phase 1** with you. We then go phase by phase.
 
-Goal: **finish and deploy first**, with a live link, a clean README and ≥85% test coverage. Extras come after that.
+Goal: **finish and deploy first**, with a live link, a clean README and ≥90% test coverage (matching the repository's coverage configuration). Extras come after that.
 
 ---
 
@@ -43,7 +43,7 @@ ticket_booking_api/
 ├── tests/               or per-app tests/ folders; factories.py, conftest.py
 ├── plan/plan_main.md    this build plan (roadmap, kept in the repo)
 ├── docs/erd.png
-├── Dockerfile, docker-compose.yml, .env.example, render.yaml
+├── Dockerfile, docker-compose.yml, docker-compose.prod.yml, .env.example
 ├── .github/workflows/ci.yml
 ├── requirements.txt, requirements-dev.txt, pyproject.toml (ruff + pytest config)
 └── README.md
@@ -177,26 +177,33 @@ def place_order(user, event_id, items) -> Order:
 
 **Done when:** in Compose, a paid order sends an email and an unpaid order expires after 15 minutes. Use a short env override such as `ORDER_TTL_MINUTES=1` for the demo.
 
-### Phase 6 — Docker, CI, deploy, README (Week 4)
-1. Make the Dockerfile production-ready: non-root user, `collectstatic`, gunicorn entrypoint, and a migrate step as the Render pre-deploy command.
+### Phase 6 — Docker, CI, Oracle deployment, README (Week 4)
+Deploy on the existing Oracle instance alongside the RAG app. Read-only inspection confirmed 2 ARM cores, approximately 12 GiB RAM with 10 GiB available, 42 GB free disk, and five healthy RAG containers. These are capacity snapshots, not peak-load guarantees; recheck before deployment. Reuse the current instance without resizing it or provisioning paid services.
+
+1. Make the Dockerfile production-ready: ARM64-compatible runtime dependencies, non-root user, production requirements, `collectstatic`, and a Gunicorn entrypoint. Keep local development in `docker-compose.yml`.
 2. `.github/workflows/ci.yml` runs on push/PR:
    - service containers for postgres:16 and redis:7
-   - `ruff check`
-   - `pytest --cov --cov-fail-under=85`
+   - `ruff check .` and `ruff format --check .`
+   - `pytest --cov --cov-fail-under=90` (matching `pyproject.toml`)
    - a CI badge in the README
-3. Add a `render.yaml` blueprint with a web service, Postgres, Key Value (Redis) and a Celery worker running `-B` for beat.
-   - ⚠️ Render's free tier doesn't include background workers, free web services sleep when idle, and free Postgres expires after a set period. Either pay for the cheapest worker (~$7/mo) or run worker+beat inside the web container with honcho. Check current limits when you get here.
-4. `prod.py` settings: `DEBUG=False`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, secure cookies, whitenoise, logging, and optionally Sentry.
-5. Seed the live DB with `seed_demo` and create a demo organizer and attendee, with credentials in the README.
-6. **README** covers:
+3. Add a standalone `docker-compose.prod.yml`, deployed from a separate directory with project name `ticket-booking`:
+   - Gunicorn web service, PostgreSQL 16, Redis 7, Celery worker, and one separate Beat service; omit development bind mounts and Mailpit.
+   - Dedicated credentials, Compose network, and persistent database volume; do not reuse the RAG app's database, Redis, or volumes. Do not publish database or Redis ports.
+   - Health checks, restart policies, bounded logs, and resource limits. Start with two Gunicorn workers and Celery concurrency 1 to leave CPU capacity for the existing app.
+4. Use a separate public port, leaving the RAG frontend's ports 80/443 and configuration unchanged. Recheck port availability before deployment. Configure trusted HTTPS for the new endpoint before publishing credentials, and allow only the chosen public port in OCI network rules and the host firewall. A different port alone does not provide TLS.
+5. Set `DJANGO_SETTINGS_MODULE=config.settings.prod` explicitly in the production Compose configuration for web, worker, Beat, and management commands. Configure `DEBUG=False`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` (including the public port), secure cookies, trusted proxy headers, WhiteNoise, logging, and production SMTP via `EMAIL_URL`. Keep secrets in a server-only environment file outside version control.
+6. Document the deployment sequence: back up the ticket-booking database on updates, build the ARM64 image, start and verify database/Redis health, run migrations as a one-off production command, then start web/worker/Beat and verify health. Use project-scoped commands so the RAG stack is not restarted or recreated. Retain the prior image and document rollback, including database restore when migrations are incompatible.
+7. Document scheduled PostgreSQL backups with a copy off the instance and a verified restore procedure. Seed the live DB with `seed_demo` and publish only demo organizer/attendee credentials in the README; keep administrative credentials private.
+8. **README** covers:
    - a one-line pitch and the live URL + Swagger link
    - the ERD image
    - an architecture diagram (API ↔ Postgres ↔ Redis ↔ Celery)
    - a "How overselling is prevented" section with a code snippet and the test
    - local setup (`docker compose up`)
+   - Oracle production setup, the separate public port and HTTPS configuration, deployment/update commands, logs, and backup/restore instructions
    - the endpoint table and the test/coverage badge
 
-**Done when:** the live URL works end-to-end, CI is green and the README is complete. **Stop here and ship.**
+**Done when:** the live HTTPS URL works end-to-end, paid orders send email, unpaid orders expire and restore stock, containers recover after restart, database restore is verified, CI passes with ≥90% coverage, and the README is complete. Confirm the existing RAG app remains healthy and reachable after deployment. **Stop here and ship.**
 
 ### Phase 7 — Stretch (Week 5+, only after deploy)
 1. **Stripe (test mode):**
@@ -224,7 +231,7 @@ def place_order(user, event_id, items) -> Order:
 - Phase 1: `python manage.py migrate` on a fresh DB, log in to admin, run `seed_demo`.
 - Phase 4: run `pytest -k oversell --count=20` (pytest-repeat). Manual Swagger run: register → login → book → pay → check-in → check-in again returns 409.
 - Phase 5: watch `docker compose logs worker beat` and check that the order flips to `expired` and stock is restored.
-- Phase 6: CI is green on GitHub. Running the full lifecycle against the live Render URL with curl/Swagger succeeds.
+- Phase 6: CI is green on GitHub with ≥90% coverage. Run the full lifecycle against the live Oracle-hosted HTTPS URL with curl/Swagger, verify email delivery and order expiry, check restart recovery and database restore, and confirm the existing RAG app remains healthy and reachable.
 
 ## What I'll build right after approval
 0. **First step:** save this full plan into the project as `plan/plan_main.md`, creating the `plan/` folder in the project root. It becomes the in-repo roadmap and gets committed with Phase 0.
