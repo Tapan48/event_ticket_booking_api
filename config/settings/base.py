@@ -66,8 +66,13 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {"default": env.db("DATABASE_URL")}
 DATABASES["default"]["CONN_MAX_AGE"] = 60
 
-# Broker / cache for Celery (Phase 5).
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
+
+# Celery (config/celery.py reads every CELERY_* setting).
+CELERY_BROKER_URL = REDIS_URL
+CELERY_TIMEZONE = "UTC"
+CELERY_TASK_IGNORE_RESULT = True  # nothing reads task results, so no result backend
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 AUTH_USER_MODEL = "accounts.User"
 
