@@ -2,10 +2,10 @@
 
 A Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
-> **Status:** Phases 0–4 of the [roadmap](plan/plan_main.md) are complete: the data model with database constraints, JWT auth, role-based CRUD, filtering and pagination, and **booking with overselling protection plus check-in**. Background jobs (emails, order expiry) come next. See [`plan/`](plan/).
+> **Status:** Phases 0–5 of the [roadmap](plan/plan_main.md) are complete: the data model with database constraints, JWT auth, role-based CRUD, filtering and pagination, **booking with overselling protection plus check-in**, and Celery jobs for ticket emails and order expiry. Deployment and CI come next. See [`plan/`](plan/).
 
 ## Stack
-Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Redis 7 · Docker Compose · pytest · ruff
+Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Celery + Redis 7 · Docker Compose · pytest · ruff
 
 ## API
 
@@ -87,6 +87,15 @@ A **negative control** runs a naive, unlocked read-check-write booking in the sa
 
 Check-in uses the same idea: a single `UPDATE … WHERE code = … AND checked_in_at IS NULL`. Postgres re-checks the condition after a concurrent scan commits, so a ticket can never be admitted twice.
 
+## Background jobs (Celery + Redis)
+
+| Job | Trigger | What it does |
+|---|---|---|
+| `send_ticket_email` | Queued by payment through `transaction.on_commit` | Emails the buyer an HTML + text message with their ticket codes. It retries SMTP or connection errors with exponential backoff, up to 5 times. A rolled-back payment never sends. |
+| `expire_stale_orders` | Celery beat, every 60 s | Expires `pending` orders past their 15-minute hold and puts the tickets back on sale. It uses `select_for_update(skip_locked=True)`, so an order being paid at that moment is skipped rather than blocking, and it releases through the same idempotent path as cancel. A pay-vs-expire race test proves stock is restored exactly once. |
+
+In development, every email lands in **Mailpit** at http://localhost:8025.
+
 ## Data model
 
 Users (attendees and organizers) · Venues · Events (with categories) · Ticket types · Orders · Tickets.
@@ -103,6 +112,7 @@ docker compose run --rm web python manage.py migrate
 docker compose run --rm web python manage.py seed_demo      # demo users, venues, events, ticket types
 docker compose run --rm web python manage.py createsuperuser
 curl localhost:8000/health/                                 # {"status": "ok", "database": "ok"}
+open http://localhost:8025                                  # Mailpit: emails sent by the worker
 ```
 
 Admin is at http://localhost:8000/admin/; log in with the superuser you created. The demo users (`organizer@demo.dev`, `organizer2@demo.dev`, `attendee@demo.dev`, `staff@demo.dev`) share the password `demo-pass-123`; use them to log in to the API.
@@ -121,4 +131,4 @@ Git hooks (ruff + basic checks) run via [pre-commit](https://pre-commit.com):
 python3 -m venv .venv && .venv/bin/pip install pre-commit && .venv/bin/pre-commit install
 ```
 
-Celery `worker` / `beat` services are placeholders until Phase 5 (`docker compose --profile celery up`).
+`docker compose up` also starts the Celery `worker` and `beat` and Mailpit. The worker doesn't auto-reload, so run `docker compose restart worker beat` after changing task code.

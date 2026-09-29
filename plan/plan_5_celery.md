@@ -1,6 +1,12 @@
 # Phase 5: Celery + Redis (Emails and Order Expiry)
 
-> **Status: in progress**
+> **Status: ✅ done.** Notes:
+> - **The email task is imported lazily** inside `mark_order_paid`, because `tasks.py` imports `services` for the expiry task.
+> - **The retry test checks both ends** (the first failure raises `Retry`; the attempt at `max_retries` re-raises the original error), since eager mode doesn't sleep through backoff.
+> - **Mailpit is pinned** to `axllent/mailpit:v1.27`.
+> - **`dev.py` no longer forces the console email backend**; `EMAIL_URL` decides. Your local `.env` got `EMAIL_URL`/`DEFAULT_FROM_EMAIL`, so other machines need them too (see `.env.example`).
+> - Result: 231 tests with 100% coverage, and the race tests pass 180/180 (`--count=20`).
+> - Live in Compose: paying order #3 put the email in Mailpit (worker log: task succeeded in 0.12s). A backdated pending order was expired by beat within ~65s and its 3 tickets went back on sale (297 → 300).
 
 ## Context
 This is Phase 5 of [plan_main.md](plan_main.md). Phase 4 left two gaps:
