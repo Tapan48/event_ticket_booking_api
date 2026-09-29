@@ -124,3 +124,6 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
 }
+
+# Minutes a pending order holds its tickets before they return to sale.
+ORDER_TTL_MINUTES = env.int("ORDER_TTL_MINUTES", default=15)
