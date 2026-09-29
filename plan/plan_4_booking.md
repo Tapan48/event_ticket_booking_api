@@ -1,6 +1,11 @@
 # Phase 4: Booking Flow with Locking ★
 
-> **Status: in progress**
+> **Status: ✅ done.** Notes:
+> - **Negative control confirmed:** the naive unlocked version oversells under the same harness, so the concurrency tests aren't vacuous. All 7 race tests pass 20/20 repeated runs.
+> - **Extra race tests:** multi-seat orders never split the last seats, and orders naming tiers in opposite order don't deadlock.
+> - **Swagger fix:** drf-spectacular calls `get_queryset()` with no real user, so the user-scoped order and ticket views return `.none()` under `swagger_fake_view`. The warning-free schema test caught this.
+> - **Extras:** the 409 check-in response uses DRF's datetime format; order and ticket list query counts are tested constant; check-in responses include the attendee's email.
+> - Result: 215 tests with 100% coverage. The curl run on the dev server passed: book → codes hidden → pay → attendee scan 403 → organizer scan 200 → rescan 409; 6 of 5 Front Row → 409; book 3 then cancel → stock back to 5.
 
 ## Context
 This is Phase 4 of [plan_main.md](plan_main.md) and the project's main talking point: **two people can never buy the last ticket**. Attendees place orders, which reserve stock for 15 minutes, then pay (mocked) or cancel. Organizers and staff check tickets in by code, and a used ticket is rejected. Celery expiry and email arrive in Phase 5.

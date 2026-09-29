@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Event Ticketing & Booking API (Django + DRF). Organizers create events and sell tickets; attendees browse, book, pay, and check in. The full phased roadmap is in `plan/plan_main.md`; each phase has a detailed sub-plan `plan/plan_<n>_<name>.md` (write one before starting a phase and add it to the index at the bottom of `plan_main.md`). Follow the phase order — finish and deploy before stretch features like Stripe.
 
-Phases 0–3 are done (skeleton; models/admin/seed/ERD; JWT auth + CRUD for venues, categories, events, ticket types; filtering/search/pagination). No booking (Phase 4) yet. Items marked "(planned)" describe code that doesn't exist yet. Swagger UI: `/api/docs/`.
+Phases 0–4 are done (skeleton; models/admin/seed/ERD; JWT auth + CRUD; filtering/search/pagination; booking with row locking, mock payment, check-in). No Celery jobs (Phase 5) yet. Items marked "(planned)" describe code that doesn't exist yet. Swagger UI: `/api/docs/`.
 
 ## Commands (Docker Compose is the dev environment)
 
@@ -22,7 +22,7 @@ docker compose run --rm web pytest --cov            # full suite; fails under 90
 docker compose run --rm web pytest apps/events/tests/test_models.py::TestTicketType::test_database_blocks_overselling
 docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
 .venv/bin/pre-commit run --all-files                # hooks are installed in .git/hooks
-# (planned) pytest -k oversell --count=20 (pytest-repeat)
+docker compose run --rm web pytest apps/orders/tests/test_concurrency.py --count=20   # race tests, repeated
 ```
 
 - Settings are split `config/settings/{base,dev,test,prod}.py`; env comes from `.env` (see `.env.example`). `manage.py` defaults to dev, `wsgi.py`/`asgi.py` to prod.
@@ -35,15 +35,15 @@ docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
 - Apps live under `apps/` with short labels (`AppConfig.name = "apps.accounts"`, `label = "accounts"`), so model refs are `accounts.User`, `events.TicketType`. `common/` is a plain package (not an installed app) holding `TimeStampedModel` and test helpers. Schema diagram and the full constraint list: `docs/erd.md` — keep it in sync when models change.
   - `accounts`: `User` has no username; `email` is the login field and is always stored lowercased by `UserManager` (`get_by_natural_key` normalizes, so auth is case-insensitive). `role` is attendee/organizer; staff = `is_staff`. `Profile` is created by a `post_save` signal (`signals.py`, wired in `AccountsConfig.ready()`), which is why the admin hides the Profile inline on the add page.
   - `events`: `Venue`, `Category`, `Event`, `TicketType`. `TicketType.quantity_available` defaults to `quantity_total` on save/clean.
-  - `orders`: `Order`, `Ticket` (random `code` from `generate_ticket_code`). (planned) booking services, Celery tasks, check-in. `payments` (Stripe) is stretch only.
+  - `orders`: `Order`, `Ticket` (random `code` from `generate_ticket_code`), booking services, order/ticket/check-in endpoints. (planned) Celery tasks. `payments` (Stripe) is stretch only.
 - Choice enums used inside `Meta.constraints` are module-level (`EventStatus`, `OrderStatus`, `Role`) and aliased on the model (`Event.Status`, `Order.Status`, `User.Role`), because a nested `Meta` can't see sibling nested classes.
 - Deletion rules are deliberate: event→organizer/venue, order→user, and ticket→ticket_type are `PROTECT` (anything with sold tickets can't disappear); event→ticket types and order→tickets `CASCADE`.
-- (planned) **Business logic lives in `apps/orders/services.py`; views stay thin.** Key functions:
-  - `place_order` — inside `transaction.atomic()`: lock the user row (serializes the per-user ticket limit), lock ticket types with `select_for_update().order_by("pk")` (consistent lock order prevents deadlocks), validate, decrement `quantity_available` with `F()`, create a `pending` Order with `expires_at` and its Tickets.
-  - `release_order(order, status)` — used by both cancel and expiry; only acts on `pending` orders (idempotent) and restores stock with `F()`.
-  - `mark_order_paid(order)` — the single path to `paid`, used by the mock `pay` endpoint now and the Stripe webhook later; sends the ticket email via `transaction.on_commit`.
-  - Check-in is one conditional `UPDATE ... WHERE checked_in_at IS NULL AND order paid`; zero rows updated → diagnose as 404/409/400.
-- DB constraints are the last line of defence and must be kept — above all `ticket_type_quantity_available_non_negative`. They're named `IntegerField` + `CheckConstraint`s (not `PositiveIntegerField`) with `violation_error_message`s, so the admin's `full_clean()` shows them as form errors. (planned) An `IntegrityError` from the quantity constraint maps to a 409 "sold out".
+- **All booking logic lives in `apps/orders/services.py`; views stay thin.** Anything that moves stock or changes an order's status must go through it and follow its locking rules (module docstring): `select_for_update()` inside `transaction.atomic()`, ticket types locked in **pk order**, stock changed only with `F()`. Services raise DRF exceptions directly (`ValidationError` 400, `common.exceptions.Conflict` 409, `SoldOut` 409, `NotFound`, `PermissionDenied`).
+  - `place_order(user, event_id, [(ticket_type_id, qty), ...])` — locks the user row (serializes the per-user limit), then the tiers (`of=("self",)`), validates, decrements, creates a `pending` Order (`expires_at = now + settings.ORDER_TTL_MINUTES`) and bulk-creates Tickets. Maps an `IntegrityError` on the stock constraint to `SoldOut`.
+  - `release_order(order, status)` — idempotent (no-op unless `pending`), restores stock; `cancel_order` wraps it. (planned) Phase 5 expiry task reuses it.
+  - `mark_order_paid(order)` — the single path to `paid` (mock `pay` endpoint now, Stripe webhook later). An overdue pending order is released as `expired` (committed) and then 409s. (planned) Phase 5 adds the ticket email via `transaction.on_commit`.
+  - `check_in(code, user)` — checks existence/permission/paid first (paid is terminal, so that's race-free), then one conditional `UPDATE ... WHERE pk = … AND checked_in_at IS NULL` on the ticket's **own columns only** (a join condition in the UPDATE wouldn't be re-checked by Postgres after a lock wait); 0 rows → 409 with the first scan's time.
+- DB constraints are the last line of defence and must be kept — above all `ticket_type_quantity_available_non_negative`. They're named `IntegerField` + `CheckConstraint`s (not `PositiveIntegerField`) with `violation_error_message`s, so the admin's `full_clean()` shows them as form errors.
 - Tickets are created at order time (pending) and are only valid for check-in once the order is `paid`.
 - (planned) Celery beat runs `expire_stale_orders` every 60s, selecting with `select_for_update(skip_locked=True)`; the beat schedule is in settings (no django-celery-beat).
 
@@ -60,11 +60,12 @@ docker compose run --rm web sh -c 'ruff check . && ruff format --check .'
 - DB constraints get mirrored as serializer validation (min values, date order) so clients get 400s, not 500s.
 - `TicketType.quantity_available` is read-only in the API; editing `quantity_total` locks the row and preserves the sold count (`TicketTypeSerializer.update`).
 - drf-spectacular schema must stay warning-free — `common/tests/test_api_docs.py` runs `spectacular --validate --fail-on-warn`.
-- (planned) attendees see only their own orders (404 for others via queryset scoping); check-in is staff or that event's organizer.
+- Orders/tickets are scoped to `request.user` in `get_queryset` (others → 404; staff list all orders but only the buyer may pay/cancel → 403). Querysets that depend on `request.user` must return `.none()` when `swagger_fake_view` is set, or schema generation fails the warning-free test.
+- Ticket codes are hidden (`null`) in order responses until the order is paid; `CanCheckIn` gates the check-in view by role, and `check_in` checks the specific event's organizer.
 
 ## Testing conventions
 
 - pytest + pytest-django + factory-boy. Tests live per app in `apps/<app>/tests/`; factories in `apps/<app>/tests/factories.py` (`UserFactory`/`OrganizerFactory`/`StaffFactory`, `EventFactory` (published, 7 days out), `TicketTypeFactory`, `OrderFactory`, `TicketFactory`; factory users' password is `DEFAULT_PASSWORD`). Admin smoke tests use pytest-django's `admin_client`. Root `conftest.py` provides `api_client`, `client_for(user)` (force-authenticated `APIClient`; `None` = anonymous) and `attendee`/`organizer`/`other_organizer`/`staff` fixtures; permission matrices parametrize fixture names and resolve them with `request.getfixturevalue`. Auth-flow tests use real JWTs via the login endpoint.
 - To test a DB constraint, use `common.tests.helpers.assert_violates("<constraint_name>", lambda: ...)` — it wraps the statement in `transaction.atomic()` and asserts that specific constraint fired.
-- (planned) Concurrency tests use `@pytest.mark.django_db(transaction=True)`, threads synchronized with `threading.Barrier`, and must close each thread's DB connection.
+- Concurrency tests (`apps/orders/tests/test_concurrency.py`) use `@pytest.mark.django_db(transaction=True)` and `common.tests.helpers.run_concurrently(func, args)` (threads released by a `threading.Barrier`, each closing its DB connection; returns results or exceptions). Create all fixtures *before* the threads start — each thread has its own connection and sees only committed rows. Keep the negative-control test: it proves the harness really races.
 - (planned) CI (GitHub Actions) runs ruff and `pytest --cov` (90% floor from pyproject) against Postgres and Redis service containers.

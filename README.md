@@ -2,7 +2,7 @@
 
 A Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
-> **Status:** Phases 0–3 of the [roadmap](plan/plan_main.md) are complete: the project skeleton, the data model with database constraints, JWT auth with role- and ownership-based CRUD, and filtering, search and pagination. Booking with overselling protection comes next. See [`plan/`](plan/).
+> **Status:** Phases 0–4 of the [roadmap](plan/plan_main.md) are complete: the data model with database constraints, JWT auth, role-based CRUD, filtering and pagination, and **booking with overselling protection plus check-in**. Background jobs (emails, order expiry) come next. See [`plan/`](plan/).
 
 ## Stack
 Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Redis 7 · Docker Compose · pytest · ruff
@@ -20,6 +20,11 @@ Interactive docs: **http://localhost:8000/api/docs/** (Swagger UI). Log in there
 | `/api/categories/` (by slug) | Anyone reads; staff write. |
 | `/api/events/` | Anyone reads published events; organizers also see their own drafts. The owner or staff edit. |
 | `/api/ticket-types/` | Only the event's organizer adds or edits them. Stock (`quantity_available`) is read-only. |
+| `POST /api/orders/` | Reserve tickets: `{"event": 1, "items": [{"ticket_type": 2, "quantity": 2}]}`. They're held for 15 minutes. |
+| `GET /api/orders/`, `/api/orders/{id}/` | Your orders; anyone else's order returns 404. Ticket codes appear once the order is paid. |
+| `POST /api/orders/{id}/pay/`, `/cancel/` | Mock payment, or cancel a pending order to release its tickets. |
+| `GET /api/tickets/` | Your valid tickets (from paid orders). |
+| `POST /api/checkin/` | `{"code": "…"}`. Staff or the event's organizer only. A second scan returns **409** with the first scan's time. |
 
 Deleting something that is still referenced, such as a venue with events or an event with sold tickets, returns **409 Conflict**.
 
@@ -46,6 +51,41 @@ GET /api/events/?search=rock
 | `ordering` | `starts_at` (the default), `created_at` or `min_price`. Prefix with `-` for descending. |
 
 Venues filter by `?city=` and support `?search=`. Categories support `?search=`. Ticket types filter by `?event=<id>`.
+
+## How overselling is prevented
+
+When 20 people try to buy the last ticket at the same moment, exactly one succeeds. [`apps/orders/services.py`](apps/orders/services.py) does it in four layers:
+
+```python
+with transaction.atomic():
+    # 1. One booking at a time per user.
+    User.objects.select_for_update().get(pk=user.pk)
+    # 2. Row locks on the ticket tiers, always taken in pk order.
+    tiers = (
+        TicketType.objects.select_for_update(of=("self",))
+        .filter(pk__in=ids, event_id=event_id)
+        .order_by("pk")
+    )
+    ...  # validate stock and the per-user limit
+    # 3. Atomic decrement, done in SQL.
+    TicketType.objects.filter(pk=tier.pk).update(quantity_available=F("quantity_available") - qty)
+# 4. CHECK (quantity_available >= 0) in Postgres is the backstop -> 409 "Sold out".
+```
+
+1. **Per-user lock.** Locking the buyer's row makes one person's parallel requests queue up, so `max_tickets_per_user` can't be beaten by double-clicking.
+2. **`select_for_update()` on the ticket tiers.** The second buyer waits until the first commits, then sees the real stock. Locks are always taken in primary-key order, so two orders for the same tiers can't deadlock.
+3. **`F()` expressions.** The decrement runs as `SET quantity_available = quantity_available - n` in the database, never as a Python read-modify-write.
+4. **A database constraint.** Even if application code were wrong, Postgres refuses to let stock go negative.
+
+**Proof:** [`apps/orders/tests/test_concurrency.py`](apps/orders/tests/test_concurrency.py) runs real threads against Postgres, released together by a barrier:
+- 20 buyers for 1 ticket → exactly 1 sale;
+- 30 buyers for 10 → exactly 10;
+- a user racing themselves can't exceed their limit;
+- 10 simultaneous scans of one ticket admit it once.
+
+A **negative control** runs a naive, unlocked read-check-write booking in the same harness and shows it *does* oversell. That proves the test really creates races. Every test passes 20 out of 20 repeated runs (`pytest apps/orders/tests/test_concurrency.py --count=20`).
+
+Check-in uses the same idea: a single `UPDATE … WHERE code = … AND checked_in_at IS NULL`. Postgres re-checks the condition after a concurrent scan commits, so a ticket can never be admitted twice.
 
 ## Data model
 

@@ -241,4 +241,4 @@ Each phase gets a detailed sub-plan in this folder, named `plan_<n>_<name>.md`.
 | 1 — Models, migrations, admin, ERD | [plan_1_models.md](plan_1_models.md) | ✅ done |
 | 2 — Auth, CRUD, permissions | [plan_2_auth_crud.md](plan_2_auth_crud.md) | ✅ done |
 | 3 — Filtering, search, pagination | [plan_3_filtering.md](plan_3_filtering.md) | ✅ done |
-| 4 — Booking with locking | [plan_4_booking.md](plan_4_booking.md) | in progress |
+| 4 — Booking with locking | [plan_4_booking.md](plan_4_booking.md) | ✅ done |
