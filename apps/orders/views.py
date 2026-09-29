@@ -4,10 +4,19 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from common.permissions import CanCheckIn
 
 from .models import Order, Ticket
-from .serializers import OrderSerializer, PlaceOrderSerializer, TicketSerializer
-from .services import cancel_order, mark_order_paid, place_order
+from .serializers import (
+    CheckedInTicketSerializer,
+    CheckInSerializer,
+    OrderSerializer,
+    PlaceOrderSerializer,
+    TicketSerializer,
+)
+from .services import cancel_order, check_in, mark_order_paid, place_order
 
 
 def orders_with_tickets():
@@ -85,3 +94,16 @@ class TicketViewSet(viewsets.ReadOnlyModelViewSet):
         return Ticket.objects.filter(
             order__user=self.request.user, order__status=Order.Status.PAID
         ).select_related("ticket_type__event")
+
+
+class CheckInView(APIView):
+    """Scan a ticket code at the door. 409 if it was already used."""
+
+    permission_classes = [CanCheckIn]
+
+    @extend_schema(request=CheckInSerializer, responses=CheckedInTicketSerializer)
+    def post(self, request):
+        payload = CheckInSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        ticket = check_in(payload.validated_data["code"], request.user)
+        return Response(CheckedInTicketSerializer(ticket).data)

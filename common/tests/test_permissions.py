@@ -4,7 +4,12 @@ import pytest
 from django.contrib.auth.models import AnonymousUser
 
 from apps.accounts.tests.factories import OrganizerFactory, StaffFactory, UserFactory
-from common.permissions import IsOrganizerOrReadOnly, IsOwnerOrReadOnly, IsStaffOrReadOnly
+from common.permissions import (
+    CanCheckIn,
+    IsOrganizerOrReadOnly,
+    IsOwnerOrReadOnly,
+    IsStaffOrReadOnly,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -41,6 +46,15 @@ def test_role_permissions(permission, kind, allowed):
 
     assert permission().has_permission(request("GET", user), view=None)
     assert permission().has_permission(request("POST", user), view=None) is allowed
+
+
+@pytest.mark.parametrize(
+    ("kind", "allowed"), [(ANON, False), ("attendee", False), ("organizer", True), ("staff", True)]
+)
+def test_can_check_in(kind, allowed):
+    user = make_user(kind)
+
+    assert CanCheckIn().has_permission(request("POST", user), view=None) is allowed
 
 
 class TestIsOwnerOrReadOnly:

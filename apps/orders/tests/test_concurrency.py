@@ -10,11 +10,12 @@ import pytest
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from apps.accounts.tests.factories import UserFactory
+from apps.accounts.tests.factories import OrganizerFactory, UserFactory
 from apps.events.models import TicketType
 from apps.events.tests.factories import EventFactory, TicketTypeFactory
 from apps.orders.models import Order, Ticket
-from apps.orders.services import SoldOut, place_order
+from apps.orders.services import SoldOut, check_in, mark_order_paid, place_order
+from common.exceptions import Conflict
 from common.tests.helpers import run_concurrently
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -136,3 +137,17 @@ def test_negative_control_naive_booking_oversells():
     assert len(orders) > 1, "expected the unlocked version to oversell"
     assert stock(ticket_type) == 0
     assert Ticket.objects.count() == len(orders)
+
+
+def test_simultaneous_scans_admit_a_ticket_once():
+    organizer = OrganizerFactory()
+    ticket_type = TicketTypeFactory(event=EventFactory(organizer=organizer))
+    order = mark_order_paid(place_order(UserFactory(), ticket_type.event_id, [(ticket_type.pk, 1)]))
+    code = order.tickets.get().code
+
+    results = run_concurrently(lambda _: check_in(code, organizer), range(10))
+
+    admitted = [r for r in results if isinstance(r, Ticket)]
+    rejected = [r for r in results if isinstance(r, Conflict)]
+    assert (len(admitted), len(rejected)) == (1, 9)
+    assert Ticket.objects.get(code=code).checked_in_at == admitted[0].checked_in_at

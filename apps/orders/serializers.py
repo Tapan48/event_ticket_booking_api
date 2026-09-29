@@ -75,3 +75,15 @@ class TicketSerializer(serializers.ModelSerializer):
         model = Ticket
         fields = ["id", "code", "event", "ticket_type", "order", "price_paid", "checked_in_at"]
         read_only_fields = fields
+
+
+class CheckInSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=32)
+
+
+class CheckedInTicketSerializer(TicketSerializer):
+    attendee = serializers.EmailField(source="order.user.email", read_only=True)
+
+    class Meta(TicketSerializer.Meta):
+        fields = [*TicketSerializer.Meta.fields, "attendee"]
+        read_only_fields = fields

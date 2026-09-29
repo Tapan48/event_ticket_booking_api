@@ -16,7 +16,8 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.fields import DateTimeField
 
 from apps.events.models import Event, TicketType
 from common.exceptions import Conflict
@@ -127,6 +128,38 @@ def mark_order_paid(order):
         release_order(order, Order.Status.EXPIRED)
         raise Conflict("This order expired and its tickets were released. Please book again.")
     return order
+
+
+def check_in(code, user):
+    """Admit a ticket once. Only staff or the event's organizer may scan."""
+    ticket = (
+        Ticket.objects.select_related("order__user", "ticket_type__event").filter(code=code).first()
+    )
+    if ticket is None:
+        raise NotFound("No ticket has this code.")
+    if not (user.is_staff or ticket.ticket_type.event.organizer_id == user.pk):
+        raise PermissionDenied("Only staff or this event's organizer can check tickets in.")
+    # Paid is terminal (paid orders can't be cancelled), so checking it first is race-free.
+    if ticket.order.status != Order.Status.PAID:
+        raise ValidationError({"code": f"This ticket's order is {ticket.order.status}, not paid."})
+
+    now = timezone.now()
+    # One conditional UPDATE on the ticket's own columns. If two scanners race, the
+    # second waits on the row lock, then Postgres re-checks "checked_in_at IS NULL"
+    # against the committed row and updates nothing.
+    admitted = Ticket.objects.filter(pk=ticket.pk, checked_in_at__isnull=True).update(
+        checked_in_at=now, checked_in_by=user, updated_at=now
+    )
+    if not admitted:
+        ticket.refresh_from_db(fields=["checked_in_at"])
+        raise Conflict(
+            {
+                "detail": "This ticket has already been checked in.",
+                "checked_in_at": DateTimeField().to_representation(ticket.checked_in_at),
+            }
+        )
+    ticket.checked_in_at, ticket.checked_in_by = now, user
+    return ticket
 
 
 def _check_event_is_bookable(event):

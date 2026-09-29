@@ -26,6 +26,14 @@ class IsStaffOrReadOnly(BasePermission):
         return _is_authenticated(request.user) and request.user.is_staff
 
 
+class CanCheckIn(BasePermission):
+    """Staff or organizers; whether it's *their* event is checked per ticket."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        return _is_authenticated(user) and (user.is_staff or user.is_organizer)
+
+
 class IsOwnerOrReadOnly(BasePermission):
     """
     Object writes are limited to staff and the object's owner.
