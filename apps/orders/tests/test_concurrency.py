@@ -3,10 +3,12 @@ The overselling proof: many buyers hit place_order at the same instant on real
 PostgreSQL. Run repeatedly with: pytest apps/orders/tests/test_concurrency.py --count=20
 """
 
+import threading
 import time
 from datetime import timedelta
 
 import pytest
+from django.db import connection, transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -14,7 +16,13 @@ from apps.accounts.tests.factories import OrganizerFactory, UserFactory
 from apps.events.models import TicketType
 from apps.events.tests.factories import EventFactory, TicketTypeFactory
 from apps.orders.models import Order, Ticket
-from apps.orders.services import SoldOut, check_in, mark_order_paid, place_order
+from apps.orders.services import (
+    SoldOut,
+    check_in,
+    expire_stale_orders,
+    mark_order_paid,
+    place_order,
+)
 from common.exceptions import Conflict
 from common.tests.helpers import run_concurrently
 
@@ -151,3 +159,51 @@ def test_simultaneous_scans_admit_a_ticket_once():
     rejected = [r for r in results if isinstance(r, Conflict)]
     assert (len(admitted), len(rejected)) == (1, 9)
     assert Ticket.objects.get(code=code).checked_in_at == admitted[0].checked_in_at
+
+
+def test_expiry_sweep_skips_an_order_being_paid():
+    """skip_locked: the sweep doesn't wait on a locked order, it leaves it for next time."""
+    ticket_type = TicketTypeFactory(quantity_total=5)
+    order = place_order(UserFactory(), ticket_type.event_id, [(ticket_type.pk, 2)])
+    Order.objects.filter(pk=order.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+    locked, release = threading.Event(), threading.Event()
+
+    def hold_lock():
+        try:
+            with transaction.atomic():
+                Order.objects.select_for_update().get(pk=order.pk)
+                locked.set()
+                release.wait(timeout=10)
+        finally:
+            connection.close()
+
+    holder = threading.Thread(target=hold_lock)
+    holder.start()
+    locked.wait(timeout=10)
+    try:
+        started = time.monotonic()
+        assert expire_stale_orders() == 0  # skipped, not blocked
+        assert time.monotonic() - started < 2
+    finally:
+        release.set()
+        holder.join()
+
+    assert expire_stale_orders() == 1
+    assert stock(ticket_type) == 5
+
+
+def test_paying_and_expiring_an_overdue_order_at_once_restores_stock_once():
+    ticket_type = TicketTypeFactory(quantity_total=5)
+    order = place_order(UserFactory(), ticket_type.event_id, [(ticket_type.pk, 2)])
+    Order.objects.filter(pk=order.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+
+    def pay_or_sweep(action):
+        return mark_order_paid(order) if action == "pay" else expire_stale_orders()
+
+    results = run_concurrently(pay_or_sweep, ["pay", "sweep", "pay", "sweep"])
+
+    assert not any(isinstance(r, Order) for r in results)  # nobody got a paid order
+    assert all(isinstance(r, (int, Conflict)) for r in results), results
+    order.refresh_from_db()
+    assert order.status == Order.Status.EXPIRED
+    assert stock(ticket_type) == 5  # released exactly once

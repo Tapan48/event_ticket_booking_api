@@ -136,6 +136,32 @@ def mark_order_paid(order):
     return order
 
 
+def expire_stale_orders(limit=500):
+    """
+    Expire pending orders past `expires_at` and put their tickets back on sale.
+    Returns how many were expired. Run every minute by Celery beat.
+    """
+    stale_ids = list(
+        Order.objects.filter(status=Order.Status.PENDING, expires_at__lte=timezone.now())
+        .order_by("expires_at")
+        .values_list("pk", flat=True)[:limit]
+    )
+    expired = 0
+    for order_id in stale_ids:
+        with transaction.atomic():
+            # skip_locked: an order someone is paying or cancelling right now is left
+            # alone instead of blocking the sweep; the next run sees its final state.
+            order = (
+                Order.objects.select_for_update(skip_locked=True)
+                .filter(pk=order_id, status=Order.Status.PENDING)
+                .first()
+            )
+            if order is not None:
+                release_order(order, Order.Status.EXPIRED)
+                expired += 1
+    return expired
+
+
 def check_in(code, user):
     """Admit a ticket once. Only staff or the event's organizer may scan."""
     ticket = (

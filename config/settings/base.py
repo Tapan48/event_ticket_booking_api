@@ -73,6 +73,12 @@ CELERY_BROKER_URL = REDIS_URL
 CELERY_TIMEZONE = "UTC"
 CELERY_TASK_IGNORE_RESULT = True  # nothing reads task results, so no result backend
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BEAT_SCHEDULE = {
+    "expire-stale-orders": {
+        "task": "apps.orders.tasks.expire_stale_orders",
+        "schedule": 60.0,  # seconds
+    },
+}
 
 # EMAIL_URL, e.g. smtp://user:pass@host:587 or consolemail:// (sets EMAIL_BACKEND, EMAIL_HOST, ...).
 globals().update(env.email_url("EMAIL_URL", default="consolemail://"))

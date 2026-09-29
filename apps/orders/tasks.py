@@ -1,7 +1,12 @@
+import logging
+
 from celery import shared_task
 
+from . import services
 from .emails import send_tickets_email
 from .models import Order
+
+logger = logging.getLogger(__name__)
 
 
 # OSError covers SMTPException and refused/reset connections. Backoff: ~1s, 2s, 4s... up to 10 min.
@@ -21,3 +26,12 @@ def send_ticket_email(order_id):
     )
     if order is not None:
         send_tickets_email(order)
+
+
+@shared_task
+def expire_stale_orders():
+    """Scheduled by CELERY_BEAT_SCHEDULE; returns unpaid tickets to sale."""
+    expired = services.expire_stale_orders()
+    if expired:
+        logger.info("Expired %d unpaid order(s)", expired)
+    return expired
