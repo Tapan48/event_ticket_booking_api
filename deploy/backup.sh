@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run from cron as root; dumps contain user data and must never enter Git/images.
+# Run from the systemd timer as root; dumps must never enter Git/images.
 set -eu
 umask 077
 DEPLOY_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

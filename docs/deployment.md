@@ -107,11 +107,20 @@ sudo sh deploy/verify-restore.sh /home/ubuntu/ticket-booking-api/backups/BACKUP.
 ```
 
 Backups use PostgreSQL's custom format, mode 0600, atomic file replacement, and a
-seven-day local retention window. Install `/etc/cron.d/ticket-booking-backup` with:
+seven-day local retention window. The minimal VM has no active cron service; install
+the dedicated systemd timer instead:
 
-```cron
-17 2 * * * root /bin/sh /home/ubuntu/ticket-booking-api/deploy/backup.sh >> /var/log/ticket-booking-backup.log 2>&1
+```bash
+sudo install -m 644 deploy/systemd/ticket-booking-backup.service deploy/systemd/ticket-booking-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ticket-booking-backup.timer
+sudo systemctl start ticket-booking-backup.service
+sudo systemctl list-timers ticket-booking-backup.timer
+sudo journalctl -u ticket-booking-backup.service --no-pager -n 20
 ```
+
+The timer runs daily at 02:17 UTC, with up to five minutes of jitter, and catches up
+after downtime. It operates only on the ticket-booking Compose project.
 
 Verify restoration into the helper's disposable database, which is dropped afterward.
 Copy backups off the VM after releases and regularly afterward. A local copy is not
