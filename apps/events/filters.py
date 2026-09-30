@@ -1,12 +1,21 @@
 import django_filters as filters
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
+from rest_framework.exceptions import NotAuthenticated
 
 from .models import Event, TicketType, Venue
 
 
 class VenueFilter(filters.FilterSet):
     city = filters.CharFilter(lookup_expr="iexact", help_text="City (case-insensitive).")
+    mine = filters.BooleanFilter(method="filter_mine", help_text="Only venues you created.")
+
+    def filter_mine(self, queryset, name, value):
+        if not value:
+            return queryset
+        if not self.request.user.is_authenticated:
+            raise NotAuthenticated()
+        return queryset.filter(created_by=self.request.user)
 
     class Meta:
         model = Venue
@@ -14,6 +23,15 @@ class VenueFilter(filters.FilterSet):
 
 
 class EventFilter(filters.FilterSet):
+    mine = filters.BooleanFilter(method="filter_mine", help_text="Only events you organize.")
+
+    def filter_mine(self, queryset, name, value):
+        if not value:
+            return queryset
+        if not self.request.user.is_authenticated:
+            raise NotAuthenticated()
+        return queryset.filter(organizer=self.request.user)
+
     city = filters.CharFilter(
         field_name="venue__city", lookup_expr="iexact", help_text="Venue city (case-insensitive)."
     )

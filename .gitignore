@@ -36,3 +36,11 @@ coverage.xml
 .idea/
 .vscode/
 .DS_Store
+
+# Frontend dependencies and test/build artifacts
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo

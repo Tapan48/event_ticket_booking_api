@@ -18,3 +18,9 @@ secrets
 .coverage
 htmlcov
 staticfiles
+**/node_modules
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+**/.env*

@@ -4,6 +4,16 @@ from rest_framework import serializers
 from .models import Profile, User
 
 
+class BrowserLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+
+class BrowserSessionSerializer(serializers.Serializer):
+    csrf_token = serializers.CharField()
+    authenticated = serializers.BooleanField()
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     # Declared explicitly to drop DRF's case-sensitive UniqueValidator; see validate_email.
     email = serializers.EmailField()
