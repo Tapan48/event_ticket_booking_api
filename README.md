@@ -1,15 +1,16 @@
-# Event Ticketing & Booking API
+# Event Ticketing & Booking
 
 [![CI](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml)
 [![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](docs/deployment.md#verified-release--2026-09-30)
 
-A Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
+A React marketplace backed by a Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
 > **Status:** Phases 0–6 are complete. Live on Oracle with trusted HTTPS, Gmail ticket delivery, automated expiry, daily backups, and passing CI (237 tests; 100% coverage measured on 2026-09-30). See the [roadmap](plan/plan_main.md) and [verified deployment](docs/deployment.md#verified-release--2026-09-30).
 
 ## Oracle demo
 
-Deployment URL: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
+Frontend: **https://event-ticket-booking.duckdns.org:8443/**.
+Developer Swagger: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
 The demo uses mock payments; no money is charged. Log in as
 `organizer@demo.dev` or `attendee@demo.dev` with password `demo-pass-123`.
 Public demo users have no staff/admin privileges. Use sample data only.
@@ -30,7 +31,7 @@ The existing RAG app retains host ports 80/443. Ticket booking has separate cont
 credentials, networks, and data volumes. See [production setup, backups, and rollback](docs/deployment.md).
 
 ## Stack
-Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Celery + Redis 7 · Docker Compose · pytest · ruff
+React · TypeScript · Vite · Tailwind CSS · shadcn/ui · TanStack Query · Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Celery + Redis 7 · Docker Compose · pytest · ruff
 
 ## API
 
@@ -40,6 +41,7 @@ Interactive docs: **http://localhost:8000/api/docs/** (Swagger UI). Log in there
 |---|---|
 | `POST /api/auth/register/` | Public. Register as `attendee` (default) or `organizer`. |
 | `POST /api/auth/login/`, `/refresh/`, `/logout/` | JWT pair; refresh tokens rotate and are blacklisted on logout. |
+| `GET/POST/DELETE /api/auth/session/` | Browser session bootstrap/login/logout with CSRF protection. JWT clients are unchanged. |
 | `GET/PATCH /api/auth/me/` | Your account and profile. |
 | `/api/venues/` | Anyone reads; organizers create; the creator or staff edit. |
 | `/api/categories/` (by slug) | Anyone reads; staff write. |
@@ -74,6 +76,8 @@ GET /api/events/?search=rock
 | `status` | For organizers, e.g. `?status=draft` for their own drafts. |
 | `search` | Title, description and venue name. |
 | `ordering` | `starts_at` (the default), `created_at` or `min_price`. Prefix with `-` for descending. |
+
+`mine=true` on events/venues returns only the authenticated organizer’s own records.
 
 Venues filter by `?city=` and support `?search=`. Categories support `?search=`. Ticket types filter by `?event=<id>`.
 
@@ -143,6 +147,20 @@ open http://localhost:8025                                  # Mailpit: emails se
 ```
 
 Admin is at http://localhost:8000/admin/; log in with the superuser you created. The demo users (`organizer@demo.dev`, `organizer2@demo.dev`, `attendee@demo.dev`, `staff@demo.dev`) share the password `demo-pass-123`; use them to log in to the API.
+
+## Frontend development
+
+With the API running on port 8000, use Node 24 in a second terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open the printed Vite URL (normally http://localhost:5173). Vite proxies API requests
+to Django, so no frontend credentials or environment file are needed. See the
+[frontend guide](frontend/README.md) for tests and the available screens.
 
 ## Development
 

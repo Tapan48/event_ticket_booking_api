@@ -109,7 +109,8 @@ services:
     <<: *service
     image: ticket-booking-proxy:${RELEASE_TAG:-local}
     build:
-      context: deploy/caddy
+      context: .
+      dockerfile: deploy/caddy/Dockerfile
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}

@@ -61,14 +61,14 @@ jobs:
 
   proxy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Build and validate unprivileged HTTPS proxy
         run: |
-          docker build -t ticket-booking-proxy-ci deploy/caddy
+          docker build -f deploy/caddy/Dockerfile -t ticket-booking-proxy-ci .
           docker run --rm --cap-drop ALL --security-opt no-new-privileges:true \
             -e PUBLIC_HOST=example.duckdns.org -e ACME_EMAIL=demo@example.com \
             -e DUCKDNS_API_TOKEN=validation-placeholder \
@@ -87,3 +87,64 @@ jobs:
           docker run --rm -v "$PWD:/repo:ro" \
             -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo \
             ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --redact --no-banner --log-opts=--all
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ticketing
+          POSTGRES_USER: ticketing
+          POSTGRES_PASSWORD: ci-test-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ticketing -d ticketing"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      SECRET_KEY: ci-only-placeholder-never-use-in-production-0123456789abcdef
+      DATABASE_URL: postgres://ticketing:ci-test-only@localhost:5432/ticketing
+      REDIS_URL: redis://localhost:6379/0
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: npm ci
+      - run: npm run lint && npm run format:check && npm run test && npm run build
+      - run: pip install -r ../requirements-dev.txt
+      - name: Start the real test API
+        run: |
+          python ../manage.py migrate --noinput
+          python ../manage.py seed_demo
+          python ../manage.py runserver 127.0.0.1:8000 --noreload > /tmp/ticket-api.log 2>&1 &
+          python - <<'PY'
+          import time
+          import urllib.request
+          for attempt in range(30):
+              try:
+                  urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=2)
+                  break
+              except OSError:
+                  time.sleep(1)
+          else:
+              raise SystemExit('Test API did not become healthy')
+          PY
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

@@ -205,7 +205,17 @@ Deploy on the existing Oracle instance alongside the RAG app. Read-only inspecti
 
 **Done when:** the live HTTPS URL works end-to-end, paid orders send email, unpaid orders expire and restore stock, containers recover after restart, database restore is verified, CI passes with ≥90% coverage, and the README is complete. Confirm the existing RAG app remains healthy and reachable after deployment. **Stop here and ship.**
 
-### Phase 7 — Stretch (Week 5+, only after deploy)
+### Phase 7 — Event marketplace frontend
+
+See [the approved frontend plan](plan_7_frontend.md). Build a responsive light React
+marketplace for attendees and organizers: browse/filter, register/login, reserve,
+demo pay, order history/tickets, organizer event/venue/tier editing and check-in.
+Keep Swagger and JWT for development/testing. Serve the frontend on the existing
+Oracle ticket endpoint using cookie/CSRF authentication; preserve the RAG stack.
+Validate browser workflows, security, mobile layout, production images and CI
+before deploying. Status: implementation and release verification in progress.
+
+### Phase 8 — Stretch (only after frontend deploy)
 1. **Stripe (test mode):**
    - `POST /orders/{id}/checkout/` creates a Checkout Session with `expires_at` matching the order TTL.
    - `POST /api/payments/webhook/` verifies the signature and handles `checkout.session.completed`, which calls `mark_order_paid()`.
@@ -251,3 +261,5 @@ Each phase gets a detailed sub-plan in this folder, named `plan_<n>_<name>.md`.
 | 4 — Booking with locking | [plan_4_booking.md](plan_4_booking.md) | ✅ done |
 | 5 — Celery: emails, order expiry | [plan_5_celery.md](plan_5_celery.md) | ✅ done |
 | 6 — Oracle deployment, CI, operations | [plan_6_deployment.md](plan_6_deployment.md) | ✅ done |
+
+| 7 — Event marketplace frontend | [plan_7_frontend.md](plan_7_frontend.md) | In progress |

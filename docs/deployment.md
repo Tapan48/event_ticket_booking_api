@@ -1,6 +1,7 @@
 # Oracle deployment and operations
 
-Public Swagger URL: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
+Public frontend: **https://event-ticket-booking.duckdns.org:8443/**.
+Swagger for development/testing: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
 Health endpoint: `/health/`. This is a portfolio demo using mock payments.
 
 ## Isolation and ports
@@ -22,6 +23,11 @@ flowchart LR
     Worker -->|STARTTLS 587| Gmail
     Caddy -->|DNS-01| DuckDNS
 ```
+
+Caddy serves the bundled React frontend, including SPA deep links. `/api/`, `/admin/`,
+`/static/` and `/health/` still route to Django. Browser login uses secure HttpOnly
+session cookies with CSRF protection; JWT endpoints remain available for API clients.
+The frontend needs no runtime secrets or additional public ports.
 
 Caddy uses the DuckDNS plugin for certificate issuance and automatic renewal.
 DNS-01 needs no incoming connection on 80/443. Certificate state persists in the
@@ -61,7 +67,7 @@ the tested Git commit SHA, and transfer images using `docker save` over SSH into
 git rev-parse HEAD
 # Use the resulting full SHA in place of COMMIT_SHA below.
 docker build --target production -t ticket-booking-app:COMMIT_SHA .
-docker build -t ticket-booking-proxy:COMMIT_SHA deploy/caddy
+docker build -f deploy/caddy/Dockerfile -t ticket-booking-proxy:COMMIT_SHA .
 ```
 
 Upload the tracked source with `git archive COMMIT_SHA` over SSH, excluding all
