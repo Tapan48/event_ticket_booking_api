@@ -3,7 +3,16 @@
 venv
 **/__pycache__
 *.py[cod]
-.env
+.env*
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.dump
+**/*.sql.gz
+.deploy
+backups
+secrets
 .pytest_cache
 .ruff_cache
 .coverage

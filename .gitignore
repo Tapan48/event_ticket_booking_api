@@ -6,7 +6,18 @@ __pycache__/
 venv/
 
 # Environment
-.env
+.env*
+!.env.example
+!.env.prod.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.dump
+*.sql.gz
+.deploy/
+backups/
+secrets/
 
 # Django
 staticfiles/
