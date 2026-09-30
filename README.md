@@ -1,8 +1,32 @@
 # Event Ticketing & Booking API
 
+[![CI](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml)
+
 A Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
-> **Status:** Phases 0–5 of the [roadmap](plan/plan_main.md) are complete: the data model with database constraints, JWT auth, role-based CRUD, filtering and pagination, **booking with overselling protection plus check-in**, and Celery jobs for ticket emails and order expiry. Deployment and CI come next. See [`plan/`](plan/).
+> **Status:** Phases 0–5 are complete. Phase 6 adds isolated Oracle deployment and CI; live acceptance checks are in progress. See the [roadmap](plan/plan_main.md) and [deployment guide](docs/deployment.md).
+
+## Oracle demo
+
+Deployment URL: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
+The demo uses mock payments; no money is charged. Once deployed, log in as
+`organizer@demo.dev` or `attendee@demo.dev` with password `demo-pass-123`.
+Public demo users have no staff/admin privileges. Use sample data only.
+
+```mermaid
+flowchart LR
+    Client -->|HTTPS :8443| Caddy
+    Caddy -->|private :8000| API[Gunicorn / Django REST API]
+    API --> PostgreSQL
+    API --> Redis
+    Beat[Celery Beat] --> Redis
+    Redis --> Worker[Celery worker]
+    Worker --> PostgreSQL
+    Worker --> Gmail
+```
+
+The existing RAG app retains host ports 80/443. Ticket booking has separate containers,
+credentials, networks, and data volumes. See [production setup, backups, and rollback](docs/deployment.md).
 
 ## Stack
 Django 5.2 · Django REST Framework · SimpleJWT · drf-spectacular · PostgreSQL 16 · Celery + Redis 7 · Docker Compose · pytest · ruff
@@ -99,6 +123,8 @@ In development, every email lands in **Mailpit** at http://localhost:8025.
 ## Data model
 
 Users (attendees and organizers) · Venues · Events (with categories) · Ticket types · Orders · Tickets.
+![Entity-relationship diagram](docs/erd.svg)
+
 See the **[ER diagram and constraint list](docs/erd.md)**.
 
 The overselling backstop is a PostgreSQL `CHECK (quantity_available >= 0)` on ticket types. Even a decrement that slips past every application check is rejected by the database. This is proven in `apps/events/tests/test_models.py::TestTicketType::test_database_blocks_overselling`.

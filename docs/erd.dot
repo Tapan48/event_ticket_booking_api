@@ -1,0 +1,23 @@
+digraph TicketBooking {
+  graph [rankdir=LR, bgcolor="white", pad=0.3, nodesep=0.5, ranksep=0.8];
+  node [shape=record, fontname="Helvetica", fontsize=11, style=filled, fillcolor="#eef4ff", color="#64748b"];
+  edge [fontname="Helvetica", fontsize=9, color="#475569"];
+  User [label="{User|id PK\lemail UNIQUE\lrole\lis_staff\l}"];
+  Profile [label="{Profile|id PK\luser_id FK UNIQUE\lphone, bio, city\l}"];
+  Venue [label="{Venue|id PK\lcreated_by_id FK (nullable)\lname, city, capacity\l}"];
+  Event [label="{Event|id PK\lorganizer_id FK\lvenue_id FK\lstarts_at, ends_at, status\lmax_tickets_per_user\l}"];
+  Category [label="{Category|id PK\lname UNIQUE\lslug UNIQUE\l}"];
+  TicketType [label="{TicketType|id PK\levent_id FK\lname, price\lquantity_total\lquantity_available\l}"];
+  Order [label="{Order|id PK\luser_id FK\lstatus, total_amount\lexpires_at, paid_at\l}"];
+  Ticket [label="{Ticket|id PK\lorder_id FK\lticket_type_id FK\lchecked_in_by_id FK (nullable)\lcode UNIQUE\lprice_paid, checked_in_at\l}"];
+  User -> Profile [label="1 : 1"];
+  User -> Venue [label="0..1 : many / creates"];
+  User -> Event [label="1 : many / organizes"];
+  Venue -> Event [label="1 : many / hosts"];
+  Event -> Category [label="many : many"];
+  Event -> TicketType [label="1 : many"];
+  User -> Order [label="1 : many"];
+  Order -> Ticket [label="1 : many"];
+  TicketType -> Ticket [label="1 : many"];
+  User -> Ticket [label="0..1 : many / checks in", style=dashed];
+}
