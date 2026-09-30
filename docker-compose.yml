@@ -21,7 +21,9 @@ services:
       retries: 10
 
   web:
-    build: .
+    build:
+      context: .
+      target: development
     env_file: .env
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
@@ -35,7 +37,9 @@ services:
         condition: service_healthy
 
   worker:
-    build: .
+    build:
+      context: .
+      target: development
     env_file: .env
     command: celery -A config worker -l info
     volumes:
@@ -49,7 +53,9 @@ services:
         condition: service_started
 
   beat:
-    build: .
+    build:
+      context: .
+      target: development
     env_file: .env
     # Keep the schedule state file out of the bind-mounted repo.
     command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule

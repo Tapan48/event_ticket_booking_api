@@ -5,7 +5,7 @@ from django.views.decorators.http import require_GET
 
 @require_GET
 def health_check(request):
-    """Liveness + DB reachability probe for Docker/Render health checks."""
+    """Liveness + DB reachability probe for container health checks."""
     try:
         connection.ensure_connection()
     except OperationalError:

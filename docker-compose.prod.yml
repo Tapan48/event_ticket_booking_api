@@ -1,0 +1,140 @@
+name: ticket-booking
+
+x-service: &service
+  restart: unless-stopped
+  init: true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+  security_opt:
+    - no-new-privileges:true
+
+x-app: &app
+  <<: *service
+  image: ticket-booking-app:${RELEASE_TAG:-local}
+  build:
+    context: .
+    target: production
+  environment:
+    DJANGO_SETTINGS_MODULE: config.settings.prod
+    SECRET_KEY: ${SECRET_KEY:?Set a production SECRET_KEY}
+    DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+    REDIS_URL: redis://redis:6379/0
+    ALLOWED_HOSTS: ${PUBLIC_HOST:?Set PUBLIC_HOST},localhost,127.0.0.1
+    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:8443
+    EMAIL_URL: ${EMAIL_URL:?Set a production EMAIL_URL}
+    DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:?Set DEFAULT_FROM_EMAIL}
+    ORDER_TTL_MINUTES: ${ORDER_TTL_MINUTES:-15}
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+
+services:
+  db:
+    <<: *service
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ticketing
+      POSTGRES_USER: ticketing
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a production database password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U ticketing -d ticketing"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 768m
+    cpus: 0.75
+
+  redis:
+    <<: *service
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, "yes", --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+    cpus: 0.25
+
+  web:
+    <<: *app
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/health/', headers={'X-Forwarded-Proto':'https'}); urllib.request.urlopen(r, timeout=5)"
+      interval: 20s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+    mem_limit: 768m
+    cpus: 1.0
+
+  worker:
+    <<: *app
+    command: [celery, -A, config, worker, --loglevel=info, --concurrency=1, --hostname=worker@%h]
+    healthcheck:
+      test: [CMD-SHELL, 'celery -A config inspect ping --destination "worker@$${HOSTNAME}" --timeout 5 | grep -q pong']
+      interval: 60s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
+    mem_limit: 512m
+    cpus: 0.5
+    stop_grace_period: 60s
+
+  beat:
+    <<: *app
+    command: [celery, -A, config, beat, --loglevel=info, --schedule=/app/var/celerybeat-schedule]
+    volumes:
+      - beat_data:/app/var
+    mem_limit: 256m
+    cpus: 0.25
+
+  proxy:
+    <<: *service
+    image: ticket-booking-proxy:${RELEASE_TAG:-local}
+    build:
+      context: deploy/caddy
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      DUCKDNS_API_TOKEN: ${DUCKDNS_API_TOKEN:?Set DUCKDNS_API_TOKEN}
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+    ports:
+      - "8443:8443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:2019/config/]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    cap_drop: [ALL]
+    mem_limit: 256m
+    cpus: 0.25
+
+volumes:
+  postgres_data:
+  redis_data:
+  beat_data:
+  caddy_data:
+  caddy_config:

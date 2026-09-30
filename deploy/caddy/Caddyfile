@@ -1,0 +1,24 @@
+{
+	auto_https disable_redirects
+	admin localhost:2019
+	email {$ACME_EMAIL}
+	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://{$PUBLIC_HOST}:8443 {
+	tls {
+		dns duckdns {env.DUCKDNS_API_TOKEN}
+		resolvers 1.1.1.1 8.8.8.8
+	}
+	encode zstd gzip
+	reverse_proxy web:8000 {
+		header_up X-Forwarded-Proto https
+	}
+	log {
+		output stdout
+		format json
+	}
+}

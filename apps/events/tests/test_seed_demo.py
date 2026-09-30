@@ -3,6 +3,7 @@ from io import StringIO
 import pytest
 from django.contrib.auth import authenticate
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -46,3 +47,29 @@ def test_seed_demo_is_idempotent():
     assert counts() == before
     # Existing users keep their original password.
     assert authenticate(email="attendee@demo.dev", password="demo-pass-123") is not None
+
+
+def test_public_seed_has_no_privileged_accounts_or_password_output(settings):
+    settings.PUBLIC_DEMO_ONLY = True
+    output = seed(public=True)
+    assert counts() == [3, 4, 5, 8, 11]
+    assert not User.objects.filter(is_staff=True).exists()
+    assert not User.objects.filter(is_superuser=True).exists()
+    assert "demo-pass-123" not in output
+    assert "staff@demo.dev" not in output
+    assert authenticate(email="organizer@demo.dev", password="demo-pass-123").is_organizer
+
+
+def test_production_seed_requires_public_flag(settings):
+    settings.PUBLIC_DEMO_ONLY = True
+    with pytest.raises(CommandError, match="requires --public"):
+        seed()
+    assert not User.objects.exists()
+
+
+@pytest.mark.parametrize("privilege", ["is_staff", "is_superuser"])
+def test_public_seed_refuses_existing_privileged_demo(privilege):
+    User.objects.create_user("organizer@demo.dev", password="private", **{privilege: True})
+    with pytest.raises(CommandError, match="privileged demo account"):
+        seed(public=True)
+    assert not Event.objects.exists()

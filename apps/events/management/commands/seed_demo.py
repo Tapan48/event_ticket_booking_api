@@ -1,8 +1,9 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
@@ -56,14 +57,36 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "--public", action="store_true", help="Seed only non-staff demo accounts."
+        )
+        parser.add_argument(
             "--password",
             default=DEFAULT_PASSWORD,
             help="Password for newly created demo users (existing users are left untouched).",
         )
 
     @transaction.atomic
-    def handle(self, *args, password, **options):
-        users = [self._get_or_create_user(password=password, **data) for data in USERS]
+    def handle(self, *args, password, public, **options):
+        if getattr(settings, "PUBLIC_DEMO_ONLY", False) and not public:
+            raise CommandError(
+                "Production demo seeding requires --public; create admins separately."
+            )
+        demo_users = [data for data in USERS if not (public and data.get("is_staff"))]
+        if (
+            public
+            and User.objects.filter(
+                email__in=[data["email"] for data in USERS], is_staff=True
+            ).exists()
+        ):
+            raise CommandError("A privileged demo account exists; remove its public access first.")
+        if (
+            public
+            and User.objects.filter(
+                email__in=[data["email"] for data in USERS], is_superuser=True
+            ).exists()
+        ):
+            raise CommandError("A privileged demo account exists; remove its public access first.")
+        users = [self._get_or_create_user(password=password, **data) for data in demo_users]
         organizers = [u for u in users if u.is_organizer]
         categories = {
             name: Category.objects.get_or_create(slug=slugify(name), defaults={"name": name})[0]
@@ -107,8 +130,7 @@ class Command(BaseCommand):
                 f"{Event.objects.count()} events, {TicketType.objects.count()} ticket types."
             )
         )
-        self.stdout.write(f"Log in as any of {', '.join(u['email'] for u in USERS)}")
-        self.stdout.write(f"Password for newly created demo users: {password}")
+        self.stdout.write(f"Demo accounts: {', '.join(u.email for u in users)}")
 
     def _get_or_create_user(self, email, password, **fields):
         user, created = User.objects.get_or_create(email=email, defaults=fields)
