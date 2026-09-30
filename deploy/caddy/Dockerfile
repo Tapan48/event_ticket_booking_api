@@ -7,5 +7,8 @@ RUN xcaddy build v${CADDY_VERSION} \
 FROM caddy:${CADDY_VERSION}-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
-RUN mkdir -p /data /config && chown -R 10001:10001 /data /config
+# Port 8443 needs no privileged-port capability. Remove the upstream file capability
+# so execution also works with cap_drop: ALL and no-new-privileges.
+RUN setcap -r /usr/bin/caddy \
+    && mkdir -p /data /config && chown -R 10001:10001 /data /config
 USER 10001:10001
