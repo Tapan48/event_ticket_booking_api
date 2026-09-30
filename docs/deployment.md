@@ -180,3 +180,28 @@ production image/proxy checks, and full-history Gitleaks scanning.
 The coverage badge records this measured release result; CI enforces a 90% minimum.
 Backups on the VM run automatically. Continue copying them offsite regularly as
 described above; the deployment created one verified offsite copy.
+
+## Frontend release — 2026-10-01
+
+Application/proxy image tag: `5db208f137c86265b51440473c4a01cda83ac6f1`.
+[Release CI](https://github.com/Tapan48/event_ticket_booking_api/actions/runs/36786715059)
+passed all four jobs: 247 backend tests with 100% measured coverage, 10 frontend
+unit tests, four real-API browser workflows, production images and secret scanning.
+The release date is Asia/Kolkata; server/CI timestamps are UTC on September 30.
+
+The public root now serves the responsive marketplace. Deep links and cached assets
+work; Swagger/JWT remain available. Live browser verification covered organizer
+creation/publication, secure login, reserve/pay/tickets, cancellation and stock return,
+check-in and duplicate rejection, mobile layout and Swagger, with no page errors.
+The matching ticket email arrived in the owner's Gmail and was confirmed by the owner.
+A controlled hold expired through Beat and restored stock; its UI disabled payment.
+Browser CSRF rejection, frontend CSP and cookie security flags were verified.
+
+The upgrade created `ticketing-20260930T224215Z.dump` before changing containers.
+It restored successfully into a disposable DB (33 migrations, nine events), and its
+private offsite copy matched SHA-256. The daily timer remains active. No migrations
+were needed. All five original RAG containers retained IDs, start times, health and
+80/443 bindings; the RAG public HTTPS endpoint remained 200.
+
+Full acceptance details: [Phase 7](../plan/plan_7_frontend.md). Documentation-only
+commits after this release do not require rebuilding the application images.

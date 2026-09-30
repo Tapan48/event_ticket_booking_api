@@ -213,7 +213,7 @@ demo pay, order history/tickets, organizer event/venue/tier editing and check-in
 Keep Swagger and JWT for development/testing. Serve the frontend on the existing
 Oracle ticket endpoint using cookie/CSRF authentication; preserve the RAG stack.
 Validate browser workflows, security, mobile layout, production images and CI
-before deploying. Status: implementation and release verification in progress.
+before deploying. Status: complete; live Oracle frontend, CI and release verification passed (2026-10-01).
 
 ### Phase 8 — Stretch (only after frontend deploy)
 1. **Stripe (test mode):**
@@ -262,4 +262,4 @@ Each phase gets a detailed sub-plan in this folder, named `plan_<n>_<name>.md`.
 | 5 — Celery: emails, order expiry | [plan_5_celery.md](plan_5_celery.md) | ✅ done |
 | 6 — Oracle deployment, CI, operations | [plan_6_deployment.md](plan_6_deployment.md) | ✅ done |
 
-| 7 — Event marketplace frontend | [plan_7_frontend.md](plan_7_frontend.md) | In progress |
+| 7 — Event marketplace frontend | [plan_7_frontend.md](plan_7_frontend.md) | ✅ done |

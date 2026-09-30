@@ -1,11 +1,11 @@
 # Event Ticketing & Booking
 
 [![CI](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml)
-[![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](docs/deployment.md#verified-release--2026-09-30)
+[![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](docs/deployment.md#frontend-release--2026-10-01)
 
 A React marketplace backed by a Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
-> **Status:** Phases 0–6 are complete. Live on Oracle with trusted HTTPS, Gmail ticket delivery, automated expiry, daily backups, and passing CI (237 tests; 100% coverage measured on 2026-09-30). See the [roadmap](plan/plan_main.md) and [verified deployment](docs/deployment.md#verified-release--2026-09-30).
+> **Status:** Phases 0–7 are complete. The attendee/organizer frontend is live on Oracle with trusted HTTPS, Gmail ticket delivery, automated expiry and daily backups. CI passes: 247 backend tests (100% measured coverage), 10 frontend unit tests and four browser workflows. See the [roadmap](plan/plan_main.md) and [verified release](docs/deployment.md#frontend-release--2026-10-01).
 
 ## Oracle demo
 
@@ -18,6 +18,7 @@ Public demo users have no staff/admin privileges. Use sample data only.
 ```mermaid
 flowchart LR
     Client -->|HTTPS :8443| Caddy
+    Caddy --> SPA[React static frontend]
     Caddy -->|private :8000| API[Gunicorn / Django REST API]
     API --> PostgreSQL
     API --> Redis
