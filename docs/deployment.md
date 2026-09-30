@@ -151,3 +151,26 @@ the attempted version. Restore the previous source and explicitly start the prio
   works; double check-in returns 409. An unpaid order expires and restores inventory.
 - Ticket-container restart preserves data and resumes processing; a backup restores.
 - RAG container IDs/start times, health, configuration, and host 80/443 bindings are unchanged.
+
+## Verified release — 2026-09-30
+
+Application and proxy image tag: `022007ba01955a8c83c1307eea05853e090ca04e`.
+Later commits install the dedicated backup timer and record acceptance; they do not
+change application/proxy code. [Release CI](https://github.com/Tapan48/event_ticket_booking_api/actions/runs/36732933769)
+passed all jobs: **237 tests, 100% measured coverage**, lint/format, migration drift,
+production image/proxy checks, and full-history Gitleaks scanning.
+
+| Check | Observed result |
+|---|---|
+| HTTPS and docs | Trusted Let's Encrypt certificate via DNS-01; health/database OK; Swagger rendered 38 operations and schema returned 200; static CSS returned 200. |
+| Booking lifecycle | Registration/login, reserve/pay, ticket listing, check-in, duplicate 409, cancellation and stock restoration passed over public HTTPS. |
+| Email | Matching verification ticket delivered to the owner's Gmail inbox in HTML and text; owner confirmed receipt. |
+| Restart and expiry | All six ticket containers restarted successfully. Beat expired the test order on its next sweep and restored stock; paid ticket/check-in state persisted. Only the test order deadline was advanced; the runtime hold remains 15 minutes. |
+| Restore | `ticketing-20260930T150938Z.dump` restored into a disposable database: 33 migrations and 9 events. Verification database removed afterward. |
+| Offsite copy | Same dump copied privately to the developer's Mac under ignored `.deploy/backups/`, mode 0600; SHA-256 matched. |
+| Daily scheduling | systemd timer enabled; manual execution of its service produced `ticketing-20260930T151410Z.dump` successfully. |
+| Existing RAG | Five original container IDs/start times and 80/443 bindings preserved; all healthy; public HTTPS frontend returned 200. |
+
+The coverage badge records this measured release result; CI enforces a 90% minimum.
+Backups on the VM run automatically. Continue copying them offsite regularly as
+described above; the deployment created one verified offsite copy.

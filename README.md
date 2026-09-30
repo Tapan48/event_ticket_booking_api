@@ -1,15 +1,16 @@
 # Event Ticketing & Booking API
 
 [![CI](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tapan48/event_ticket_booking_api/actions/workflows/ci.yml)
+[![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](docs/deployment.md#verified-release--2026-09-30)
 
 A Django REST API where organizers create events and sell tickets, and attendees browse, book, pay, and check in — built so that **two people can never buy the last ticket** (row locking with `select_for_update()`, atomic transactions, `F()` expressions, and database constraints).
 
-> **Status:** Phases 0–5 are complete. Phase 6 adds isolated Oracle deployment and CI; live acceptance checks are in progress. See the [roadmap](plan/plan_main.md) and [deployment guide](docs/deployment.md).
+> **Status:** Phases 0–6 are complete. Live on Oracle with trusted HTTPS, Gmail ticket delivery, automated expiry, daily backups, and passing CI (237 tests; 100% coverage measured on 2026-09-30). See the [roadmap](plan/plan_main.md) and [verified deployment](docs/deployment.md#verified-release--2026-09-30).
 
 ## Oracle demo
 
 Deployment URL: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
-The demo uses mock payments; no money is charged. Once deployed, log in as
+The demo uses mock payments; no money is charged. Log in as
 `organizer@demo.dev` or `attendee@demo.dev` with password `demo-pass-123`.
 Public demo users have no staff/admin privileges. Use sample data only.
 

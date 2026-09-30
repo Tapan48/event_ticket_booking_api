@@ -1,6 +1,6 @@
 # Phase 6 — Oracle deployment, CI, and operations
 
-Status: in progress. Implements [Phase 6 of the main plan](plan_main.md).
+Status: complete (2026-09-30). Implements [Phase 6 of the main plan](plan_main.md).
 
 ## Deployment decisions
 
@@ -28,3 +28,17 @@ Status: in progress. Implements [Phase 6 of the main plan](plan_main.md).
 - Verify ticket-container restart recovery and database restore; retain the previous release image for rollback.
 - Compare RAG container IDs/start times, health, and published ports before/after deployment. No host reboot or global Docker cleanup.
 - Mark Phase 6 complete only after GitHub CI, live checks, backups, and RAG preservation are verified.
+
+## Verified result
+
+- Deployed ARM64 application/proxy images from `022007ba01955a8c83c1307eea05853e090ca04e`; subsequent operations/documentation commits do not change those images.
+- GitHub CI passed: 237 tests, 100% coverage, lint/format, migration drift, image/proxy checks, and full-history secret scanning.
+- Trusted HTTPS health and Swagger work; Chrome rendered 38 operations without a schema error, and WhiteNoise served production static assets.
+- Live registration, login, booking, mock payment, tickets, check-in, duplicate rejection (409), cancellation, and stock restoration passed.
+- Gmail inbox delivery verified with matching HTML/text ticket codes; the owner also confirmed receipt.
+- After restarting all six ticket containers, Beat expired the verification order and restored stock. Only that order's deadline was advanced for the test; the production hold remains 15 minutes. Paid/check-in data persisted.
+- Backup restored successfully into a disposable database (33 migrations, 9 events). A mode-0600 offsite copy on the developer's Mac has the same SHA-256 as the server dump.
+- Dedicated systemd backup timer enabled and its service successfully run. Daily at 02:17 UTC plus up to five minutes of jitter; seven-day local retention. Recurring offsite retrieval is documented as an owner operation.
+- All five RAG container IDs/start times and host 80/443 bindings unchanged; all healthy, and the RAG public HTTPS frontend returned 200.
+
+See the [release evidence and operations guide](../docs/deployment.md#verified-release--2026-09-30).
