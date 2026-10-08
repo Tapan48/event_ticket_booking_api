@@ -70,3 +70,12 @@ Use the existing RAG Caddy on public 443 to route the ticket domain through a
 private proxy-only network. Preserve original RAG routes and keep 8443 as a
 compatibility endpoint. Update trusted origins and deployment documentation;
 verify both domains, certificates, redirects, login/CSRF, and RAG backend continuity.
+
+Verified complete: clean-origin login, secure session cookies, private order history,
+CSRF-protected profile save, reload/logout and Swagger passed in a real browser.
+Both domains return 200 with trusted certificates; HTTP redirects to clean HTTPS.
+The legacy 8443 URL still works. `ticket-edge` is an internal bridge containing
+only the two proxies. RAG API/worker/DB/Redis IDs/start times remained unchanged;
+only its frontend proxy was recreated. No secrets found in either repository's
+history or outgoing changes. Ticket configuration CI passed:
+https://github.com/Tapan48/event_ticket_booking_api/actions/runs/37810474369

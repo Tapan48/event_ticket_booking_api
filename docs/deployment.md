@@ -249,3 +249,13 @@ and recreate only its frontend. The original RAG route and public 80/443 mapping
 return; ticket booking remains available on 8443. Restore the previous ticket
 Compose file and recreate its application/proxy services if its settings also need
 reverting. Keep all database and certificate volumes. No schema change is involved.
+
+Verified on 2026-10-08: both clean HTTPS domains and health routes returned 200;
+both HTTP endpoints redirected to HTTPS without a port suffix. Clean-origin browser
+login, secure cookies, private orders, a CSRF-protected save, reload/logout and
+Swagger passed with no page errors. The upstream legacy endpoint remains healthy.
+`ticket-edge` reports `bridge internal=true` with exactly the two proxy members.
+RAG API/worker/DB/Redis retained their pre-change IDs/start times and health.
+Configuration backups are under the private server directory
+`.shared-https-backup-20261008`; ticket DB backup:
+`ticketing-20261008T163557Z.dump`. No secrets or database migrations were changed.
