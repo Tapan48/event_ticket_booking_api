@@ -9,6 +9,7 @@ compose() { sh "$DEPLOY_ROOT/deploy/compose.sh" "$@"; }
 docker image inspect "ticket-booking-app:$RELEASE_TAG" >/dev/null
 docker image inspect "ticket-booking-proxy:$RELEASE_TAG" >/dev/null
 compose config --quiet
+sh "$DEPLOY_ROOT/deploy/ensure-edge-network.sh"
 if test -n "$(compose ps -q --status running web)"; then
   sh "$DEPLOY_ROOT/deploy/backup.sh"
 fi

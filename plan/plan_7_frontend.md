@@ -63,3 +63,10 @@ Record actual release evidence before marking complete.
 
 Live frontend: https://event-ticket-booking.duckdns.org:8443/
 Developer Swagger: https://event-ticket-booking.duckdns.org:8443/api/docs/
+
+## Follow-up: clean public URL (2026-10-08)
+
+Use the existing RAG Caddy on public 443 to route the ticket domain through a
+private proxy-only network. Preserve original RAG routes and keep 8443 as a
+compatibility endpoint. Update trusted origins and deployment documentation;
+verify both domains, certificates, redirects, login/CSRF, and RAG backend continuity.

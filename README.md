@@ -9,15 +9,16 @@ A React marketplace backed by a Django REST API where organizers create events a
 
 ## Oracle demo
 
-Frontend: **https://event-ticket-booking.duckdns.org:8443/**.
-Developer Swagger: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
+Frontend: **https://event-ticket-booking.duckdns.org/**.
+Developer Swagger: **https://event-ticket-booking.duckdns.org/api/docs/**.
 The demo uses mock payments; no money is charged. Log in as
 `organizer@demo.dev` or `attendee@demo.dev` with password `demo-pass-123`.
 Public demo users have no staff/admin privileges. Use sample data only.
 
 ```mermaid
 flowchart LR
-    Client -->|HTTPS :8443| Caddy
+    Client -->|HTTPS :443| Edge[Shared Caddy]
+    Edge -->|private HTTPS :8443| Caddy
     Caddy --> SPA[React static frontend]
     Caddy -->|private :8000| API[Gunicorn / Django REST API]
     API --> PostgreSQL
@@ -28,7 +29,7 @@ flowchart LR
     Worker --> Gmail
 ```
 
-The existing RAG app retains host ports 80/443. Ticket booking has separate containers,
+The shared Caddy entry point routes both domains on host ports 80/443. Ticket booking has separate containers,
 credentials, networks, and data volumes. See [production setup, backups, and rollback](docs/deployment.md).
 
 ## Stack

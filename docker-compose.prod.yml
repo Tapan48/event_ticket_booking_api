@@ -23,7 +23,7 @@ x-app: &app
     DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
     REDIS_URL: redis://redis:6379/0
     ALLOWED_HOSTS: ${PUBLIC_HOST:?Set PUBLIC_HOST},localhost,127.0.0.1
-    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:8443
+    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST},https://${PUBLIC_HOST}:8443
     EMAIL_URL: ${EMAIL_URL:?Set a production EMAIL_URL}
     DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:?Set DEFAULT_FROM_EMAIL}
     ORDER_TTL_MINUTES: ${ORDER_TTL_MINUTES:-15}
@@ -118,6 +118,10 @@ services:
       ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
     ports:
       - "8443:8443"
+    networks:
+      default:
+      ticket_edge:
+        aliases: [ticket-origin]
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -132,6 +136,11 @@ services:
     cap_drop: [ALL]
     mem_limit: 256m
     cpus: 0.25
+
+networks:
+  ticket_edge:
+    external: true
+    name: ticket-edge
 
 volumes:
   postgres_data:

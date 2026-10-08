@@ -1,19 +1,24 @@
 # Oracle deployment and operations
 
-Public frontend: **https://event-ticket-booking.duckdns.org:8443/**.
-Swagger for development/testing: **https://event-ticket-booking.duckdns.org:8443/api/docs/**.
+Public frontend: **https://event-ticket-booking.duckdns.org/**.
+Swagger for development/testing: **https://event-ticket-booking.duckdns.org/api/docs/**.
 Health endpoint: `/health/`. This is a portfolio demo using mock payments.
 
 ## Isolation and ports
 
 The Compose project is `ticket-booking`, located at `/home/ubuntu/ticket-booking-api`.
-The ARM64 VM is shared with the existing RAG project. Only the ticket proxy publishes
-host **TCP 8443**. RAG retains host 80/443. Never run global Docker prune, restart Docker,
-reboot the host, or operate on the RAG Compose project for a ticket-booking release.
+The ARM64 VM is shared with the RAG project. Its Caddy frontend owns host 80/443
+and routes each domain separately. The ticket proxy remains reachable on 8443 for
+compatibility and rollback; the canonical ticket URL uses 443 with no port suffix.
+Only the two proxies join the external Docker network `ticket-edge`; DB, Redis,
+and backend services stay on their own project networks. Never run global Docker
+prune, restart Docker, or reboot the host for a ticket release. Normal ticket releases
+do not operate on the RAG Compose project.
 
 ```mermaid
 flowchart LR
-    Browser -->|HTTPS 8443| Caddy
+    Browser -->|HTTPS 443| Edge[Shared Caddy in RAG frontend]
+    Edge -->|private TLS 8443| Caddy
     Caddy -->|private 8000| Django[Gunicorn / Django]
     Django --> PostgreSQL
     Django --> Redis
@@ -93,7 +98,7 @@ with `createsuperuser` if needed; never publish their passwords.
 ## Health, logs, and recovery
 
 ```bash
-curl --fail https://event-ticket-booking.duckdns.org:8443/health/
+curl --fail https://event-ticket-booking.duckdns.org/health/
 sudo sh deploy/compose.sh ps
 sudo sh deploy/compose.sh logs --tail 100 web worker beat
 sudo sh deploy/compose.sh restart web worker beat
@@ -205,3 +210,42 @@ were needed. All five original RAG containers retained IDs, start times, health 
 
 Full acceptance details: [Phase 7](../plan/plan_7_frontend.md). Documentation-only
 commits after this release do not require rebuilding the application images.
+
+## Shared HTTPS entry point — 2026-10-08
+
+The existing RAG Caddy now has a ticket-domain site block. It obtains and renews
+its own public certificate through the existing 80/443 entry point, then proxies to
+`https://ticket-origin:8443` over the private `ticket-edge` network. Upstream TLS is
+verified against `event-ticket-booking.duckdns.org`; verification is never disabled.
+The original Host is preserved so Django sees the public origin. Both clean and
+legacy `:8443` origins are allowed for CSRF during the compatibility period.
+
+Provision the network once before either production stack uses it:
+
+```sh
+docker network create --driver bridge --internal ticket-edge
+docker network inspect ticket-edge --format '{{.Driver}} {{.Internal}}'
+```
+
+Expected network properties: `bridge true`; only the RAG frontend and ticket proxy
+should be members. `deploy/release.sh` calls `deploy/ensure-edge-network.sh` to
+create/validate this network on subsequent releases.
+
+The RAG repository's `compose.public.yml` joins only its frontend to that network
+and bind-mounts `frontend/Caddyfile.public` read-only. Its original API/static/SSE
+routes and certificate volumes are preserved. Changes to that configuration need
+validation and a frontend-only recreation because the existing Caddy admin API is
+disabled. Do not recreate RAG API/worker/DB/Redis for this change.
+
+Release order: back up both proxy configurations and the ticket Compose file;
+validate both Compose files and the new Caddyfile; create the network; recreate
+only ticket web/worker/beat/proxy to apply the origin/network settings; then recreate
+only the RAG frontend with `--no-deps --no-build`. Validate both public domains,
+HTTP redirects, clean-origin login and a CSRF-protected write, Swagger, and the
+legacy URL. Compare RAG backend container IDs/start times against the baseline.
+
+Rollback: restore the saved RAG `compose.public.yml` and `frontend/Caddyfile.public`
+and recreate only its frontend. The original RAG route and public 80/443 mappings
+return; ticket booking remains available on 8443. Restore the previous ticket
+Compose file and recreate its application/proxy services if its settings also need
+reverting. Keep all database and certificate volumes. No schema change is involved.
